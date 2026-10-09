@@ -6,6 +6,7 @@ RUN apk add --no-cache libc6-compat openssl
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma/
 RUN npm ci
 
 FROM base AS builder
@@ -13,8 +14,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 RUN npx prisma generate
-RUN npx prisma db push
 RUN npm run build
 
 FROM base AS runner
@@ -31,9 +32,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/package.json ./package.json
 
-# Copy existing database if present
-COPY --from=builder /app/prisma/dev.db* ./prisma/
-
 USER nextjs
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+ENV PORT=3000
+
+CMD ["sh", "-c", "npx prisma db push && npm run start"]
