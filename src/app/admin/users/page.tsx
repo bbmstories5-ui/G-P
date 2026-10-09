@@ -55,6 +55,8 @@ export default function AdminUsersPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCredentials, setCopiedCredentials] = useState(false);
   const [emailDispatched, setEmailDispatched] = useState(false);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  const [notificationToast, setNotificationToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -87,6 +89,37 @@ export default function AdminUsersPage() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleResendEmail = async (targetUser: any) => {
+    setResendingUserId(targetUser.id);
+    try {
+      const res = await fetch('/api/admin/users/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: targetUser.id }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setNotificationToast({
+          message: `Invitation email sent instantly to ${targetUser.email}`,
+          type: 'success',
+        });
+      } else {
+        setNotificationToast({
+          message: `Failed to resend: ${d.error || 'Check SMTP credentials'}`,
+          type: 'error',
+        });
+      }
+    } catch (err) {
+      setNotificationToast({
+        message: 'Network error while dispatching email',
+        type: 'error',
+      });
+    } finally {
+      setResendingUserId(null);
+      setTimeout(() => setNotificationToast(null), 4000);
     }
   };
 
@@ -172,7 +205,25 @@ export default function AdminUsersPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 relative">
+      {/* Toast Notification */}
+      {notificationToast && (
+        <div
+          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-3 text-xs font-bold animate-in fade-in slide-in-from-top-4 duration-200 ${
+            notificationToast.type === 'success'
+              ? 'bg-emerald-950/95 text-emerald-200 border-emerald-700/60 backdrop-blur-md'
+              : 'bg-rose-950/95 text-rose-200 border-rose-700/60 backdrop-blur-md'
+          }`}
+        >
+          {notificationToast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-400" />
+          )}
+          <span>{notificationToast.message}</span>
+        </div>
+      )}
+
       {/* Header & Invite Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 rounded-3xl text-white shadow-xl border border-purple-900/30">
         <div>
@@ -354,28 +405,27 @@ export default function AdminUsersPage() {
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch('/api/admin/users/resend-invite', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ userId: u.id }),
-                                });
-                                const d = await res.json();
-                                if (d.success) {
-                                  alert(`✅ Invitation email resent successfully to ${u.email}`);
-                                } else {
-                                  alert(`❌ Failed to resend: ${d.error || 'Check SMTP configuration'}`);
-                                }
-                              } catch (e: any) {
-                                alert('Error resending email');
-                              }
-                            }}
-                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-700 transition-colors inline-flex items-center gap-1.5"
+                            type="button"
+                            disabled={resendingUserId === u.id}
+                            onClick={() => handleResendEmail(u)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all inline-flex items-center gap-1.5 ${
+                              resendingUserId === u.id
+                                ? 'bg-purple-100 text-purple-700 border-purple-300 opacity-80 cursor-wait'
+                                : 'border-slate-200 bg-slate-50 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-700'
+                            }`}
                             title="Resend email with login link to this member"
                           >
-                            <Mail className="w-3.5 h-3.5 text-purple-600" />
-                            <span className="hidden sm:inline">Resend Email</span>
+                            {resendingUserId === u.id ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-600" />
+                                <span>Sending...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Mail className="w-3.5 h-3.5 text-purple-600" />
+                                <span className="hidden sm:inline">Resend Email</span>
+                              </>
+                            )}
                           </button>
 
                           {u.role !== 'ADMIN' && (

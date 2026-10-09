@@ -21,8 +21,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const host = req.headers.get('host') || 'localhost:3000';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
+    const protocol = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      (host.includes('localhost') ? 'https://portal-grap.up.railway.app' : `${protocol}://${host}`);
+
     const roleLoginPath =
       user.role === 'ADMIN'
         ? '/login/admin'
@@ -32,13 +37,13 @@ export async function POST(req: NextRequest) {
         ? '/login/designer'
         : '/login/requester';
 
-    const loginUrl = `${protocol}://${host}${roleLoginPath}?email=${encodeURIComponent(user.email)}`;
+    const loginUrl = `${baseUrl.replace(/\/$/, '')}${roleLoginPath}?email=${encodeURIComponent(user.email)}`;
     const identifier =
       user.requesterProfile?.memberCode ||
       user.designerProfile?.designerCode ||
       (user.role === 'APPROVER' ? 'Lead Approver' : 'Super Admin');
 
-    const result = await sendInvitationEmail({
+    const emailPromise = sendInvitationEmail({
       toEmail: user.email,
       recipientName: user.name,
       role: user.role,
@@ -46,6 +51,12 @@ export async function POST(req: NextRequest) {
       password: customPassword || 'password123',
       loginUrl,
     });
+
+    const timeoutPromise = new Promise<{ success: boolean; messageId?: string; error?: string }>((resolve) =>
+      setTimeout(() => resolve({ success: false, error: 'Email dispatch timed out on cloud server' }), 6000)
+    );
+
+    const result = await Promise.race([emailPromise, timeoutPromise]);
 
     return NextResponse.json({
       success: result.success,

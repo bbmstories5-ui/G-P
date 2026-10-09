@@ -38,16 +38,23 @@ export async function POST(req: NextRequest) {
     const subDir = type === 'avatar' ? 'avatars' : 'attachments';
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', subDir);
 
-    await fs.mkdir(uploadDir, { recursive: true });
+    let publicUrl = '';
 
-    // Sanitize extension and filename
-    const ext = path.extname(file.name) || (file.type === 'image/png' ? '.png' : file.type === 'image/webp' ? '.webp' : '.jpg');
-    const filename = `${type}_${user.id}_${Date.now()}${ext}`;
-    const filePath = path.join(uploadDir, filename);
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
 
-    await fs.writeFile(filePath, buffer);
+      // Sanitize extension and filename
+      const ext = path.extname(file.name) || (file.type === 'image/png' ? '.png' : file.type === 'image/webp' ? '.webp' : '.jpg');
+      const filename = `${type}_${user.id}_${Date.now()}${ext}`;
+      const filePath = path.join(uploadDir, filename);
 
-    const publicUrl = `/uploads/${subDir}/${filename}`;
+      await fs.writeFile(filePath, buffer);
+      publicUrl = `/uploads/${subDir}/${filename}`;
+    } catch (fsErr: any) {
+      console.warn('Filesystem write failed or restricted (EACCES/EROFS), falling back to Data URI:', fsErr?.message);
+      // Fallback for Railway/Docker container read-only or restricted environments
+      publicUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
+    }
 
     return NextResponse.json({
       success: true,

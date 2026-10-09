@@ -135,8 +135,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const host = req.headers.get('host') || 'localhost:3000';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
+    const protocol = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      (host.includes('localhost') ? 'https://portal-grap.up.railway.app' : `${protocol}://${host}`);
+
     const roleLoginPath =
       role === 'ADMIN'
         ? '/login/admin'
@@ -146,12 +151,12 @@ export async function POST(req: NextRequest) {
         ? '/login/designer'
         : '/login/requester';
 
-    const loginUrl = `${protocol}://${host}${roleLoginPath}?email=${encodeURIComponent(cleanEmail)}`;
+    const loginUrl = `${baseUrl.replace(/\/$/, '')}${roleLoginPath}?email=${encodeURIComponent(cleanEmail)}`;
 
-    // Dispatch real email via Google Gmail SMTP if configured
-    let emailResult = null;
+    // Dispatch real email via Google Gmail SMTP if configured with safety timeout
+    let emailResult: any = null;
     try {
-      emailResult = await sendInvitationEmail({
+      const emailPromise = sendInvitationEmail({
         toEmail: cleanEmail,
         recipientName: name,
         role,
@@ -159,6 +164,12 @@ export async function POST(req: NextRequest) {
         password,
         loginUrl,
       });
+
+      const timeoutPromise = new Promise((resolve) =>
+        setTimeout(() => resolve({ success: false, error: 'Email dispatch timed out' }), 6000)
+      );
+
+      emailResult = await Promise.race([emailPromise, timeoutPromise]);
     } catch (emailErr) {
       console.error('Email sending failed (non-blocking):', emailErr);
     }

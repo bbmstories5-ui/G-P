@@ -34,7 +34,8 @@ interface NotificationSettingsModalProps {
 }
 
 const PRESET_OPTIONS: { id: SoundPreset; label: string; desc: string }[] = [
-  { id: 'ios_chord', label: 'iOS Soft Chime (Default)', desc: 'Warm Apple-inspired harmonic chord chime' },
+  { id: 'iphone_best', label: 'iPhone Best Tone (Default)', desc: 'User custom tone: Apple Best Notification Chime' },
+  { id: 'ios_chord', label: 'iOS Soft Chime', desc: 'Warm Apple-inspired harmonic chord chime' },
   { id: 'crystal_bell', label: 'Crystal Shimmer Bell', desc: 'High crisp resonance for fast recognition' },
   { id: 'marimba', label: 'Warm Wooden Marimba', desc: 'Organic acoustic mallet triad' },
   { id: 'pop_ping', label: 'Subtle Modern Pip', desc: 'Minimal executive bubble ping' },
@@ -145,48 +146,43 @@ export default function NotificationSettingsModal({
             </label>
           </div>
 
-          {/* Section 2: Sound Preset & Preview */}
+          {/* Section 2: Sound Tone & Preview */}
           {prefs.enabled && (
             <div className="space-y-3 animate-in fade-in duration-200">
               <div className="flex items-center justify-between">
-                <label className="font-bold text-slate-800 dark:text-slate-200">
-                  Select Chime Tone
+                <label className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">
+                  Notification Ringtone
                 </label>
+              </div>
+
+              <div className="p-3.5 rounded-2xl border border-indigo-500/40 bg-indigo-50/70 dark:bg-indigo-950/40 dark:border-indigo-800/60 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                    <Bell className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-slate-900 dark:text-white">
+                        iPhone Best Tone (Default)
+                      </span>
+                      <span className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Custom Apple Chime from Best Notification Tone
+                    </p>
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleTestSound}
-                  className="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1.5 transition-colors border border-indigo-200 dark:border-indigo-800"
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1.5 transition-colors border border-indigo-200 dark:border-indigo-800/80 text-xs shadow-xs"
                 >
-                  <Play className={`w-3 h-3 ${isPlayingPreview ? 'animate-ping' : ''}`} />
-                  <span>{isPlayingPreview ? 'Playing...' : 'Preview Tone'}</span>
+                  <Play className={`w-3.5 h-3.5 ${isPlayingPreview ? 'animate-ping' : ''}`} />
+                  <span>{isPlayingPreview ? 'Playing...' : 'Play Tone'}</span>
                 </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {PRESET_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      updatePref('preset', opt.id);
-                      unlockAudioContext();
-                      previewNotificationSound(opt.id, prefs.volume);
-                    }}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
-                      prefs.preset === opt.id
-                        ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/20 shadow-xs'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-[11px]">{opt.label}</span>
-                      {prefs.preset === opt.id && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
-                    </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                      {opt.desc}
-                    </p>
-                  </button>
-                ))}
               </div>
 
               {/* Volume Slider */}
