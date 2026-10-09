@@ -12,7 +12,13 @@
 /dist
 
 # Environment variables & local secrets
+.env
 .env*.local
+!.env.example
+
+# Local SQLite databases
+prisma/*.db
+prisma/*.db-journal
 
 # Debug logs
 npm-debug.log*
@@ -27,3 +33,4 @@ Thumbs.db
 # TypeScript declaration cache
 *.tsbuildinfo
 next-env.d.ts
+
