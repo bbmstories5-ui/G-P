@@ -4,25 +4,13 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('--- RESETTING DATABASE & REMOVING ALL DEMO DATA ---');
+  const existingUsers = await prisma.user.count().catch(() => 0);
+  if (existingUsers > 0) {
+    console.log(`--- DATABASE ALREADY SEEDED (${existingUsers} users found). READY ---`);
+    return;
+  }
 
-  // Clear all existing demo data and records
-  await prisma.activityLog.deleteMany({});
-  await prisma.notification.deleteMany({});
-  await prisma.comment.deleteMany({});
-  await prisma.revision.deleteMany({});
-  await prisma.approval.deleteMany({});
-  await prisma.graphicVersion.deleteMany({});
-  await prisma.graphic.deleteMany({});
-  await prisma.designerAssignment.deleteMany({});
-  await prisma.requirementFile.deleteMany({});
-  await prisma.requirement.deleteMany({});
-  await prisma.session.deleteMany({});
-  await prisma.requesterProfile.deleteMany({});
-  await prisma.designerProfile.deleteMany({});
-  await prisma.approverProfile.deleteMany({});
-  await prisma.systemSetting.deleteMany({});
-  await prisma.user.deleteMany({});
+  console.log('--- INITIALIZING DATABASE & SEEDING 17 ACCOUNTS ---');
 
   const passwordHash = await bcrypt.hash('password123', 10);
 
