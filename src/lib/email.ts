@@ -1,4 +1,14 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import dns from 'dns';
+
+// Force IPv4 DNS resolution across Node.js runtime (fixes Railway/Docker IPv6 ENETUNREACH)
+try {
+  if (dns && typeof (dns as any).setDefaultResultOrder === 'function') {
+    (dns as any).setDefaultResultOrder('ipv4first');
+  }
+} catch (e) {
+  // Ignore in environments where not supported
+}
 
 interface SendInvitationEmailParams {
   toEmail: string;
@@ -31,14 +41,15 @@ function resolveLiveLoginUrl(inputUrl: string): string {
   return inputUrl;
 }
 
-function createTransporter(smtpUser: string, smtpPass: string): Transporter {
+function createTransporter(smtpUser: string, smtpPass: string, port = 465): Transporter {
   const cleanPass = smtpPass.replace(/\s+/g, '');
   
-  // Direct SSL (port 465) is fastest and most reliable for Gmail in cloud/Docker environments
+  // Enforce IPv4 (family: 4) to prevent IPv6 routing failures on Railway/Docker
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port: port,
+    secure: port === 465,
+    family: 4,
     auth: {
       user: smtpUser,
       pass: cleanPass,
@@ -49,7 +60,7 @@ function createTransporter(smtpUser: string, smtpPass: string): Transporter {
     connectionTimeout: 10000,
     greetingTimeout: 8000,
     socketTimeout: 15000,
-  });
+  } as any);
 }
 
 export async function sendInvitationEmail({
@@ -276,7 +287,22 @@ export async function sendInvitationEmail({
     console.log(`[EMAIL DISPATCH SUCCESS] Sent invitation to ${toEmail}. Message ID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (err: any) {
-    console.error(`[EMAIL DISPATCH FAILED] Error sending to ${toEmail}:`, err);
-    return { success: false, error: err.message };
+    console.warn(`[EMAIL DISPATCH PORT 465 FAILED] Retrying with Port 587 STARTTLS IPv4:`, err.message);
+    try {
+      const fallbackTransporter = createTransporter(smtpUser, smtpPass, 587);
+      const fallbackInfo = await fallbackTransporter.sendMail({
+        from: `"Creative Portal" <${smtpUser}>`,
+        replyTo: smtpUser,
+        to: toEmail,
+        subject: `Welcome to Creative Portal - Account Invitation`,
+        text: `Hello ${recipientName},\n\nYou have been invited to Creative Portal as a ${role}.\n\nYour Login Details:\nEmail: ${toEmail}\nPassword: ${password}\nRole: ${role} (${identifier})\n\nLog in here: ${loginUrl}\n\nBest regards,\nCreative Portal Team`,
+        html: `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;background:#f8fafc;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:24px;border-radius:12px;border:1px solid #e2e8f0;"><h2>Welcome to Creative Portal</h2><p>Hello <strong>${recipientName}</strong>, you have been invited as <strong>${role}</strong>.</p><p><strong>Email:</strong> ${toEmail}<br><strong>Password:</strong> ${password}</p><p><a href="${loginUrl}" style="display:inline-block;padding:12px 24px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;">Log In Now</a></p></div></body></html>`,
+      });
+      console.log(`[EMAIL DISPATCH SUCCESS VIA FALLBACK 587] Sent to ${toEmail}. Message ID: ${fallbackInfo.messageId}`);
+      return { success: true, messageId: fallbackInfo.messageId };
+    } catch (fallbackErr: any) {
+      console.error(`[EMAIL DISPATCH COMPLETELY FAILED] Error sending to ${toEmail}:`, fallbackErr);
+      return { success: false, error: fallbackErr.message || err.message };
+    }
   }
 }
