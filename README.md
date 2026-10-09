@@ -1,4 +1,4 @@
-# Creative Request & Graphic Approval Management Portal
+# G-P - Creative Request & Graphic Approval Management Portal
 
 An enterprise-grade, workflow-driven **Creative Request & Graphic Approval Management Portal** with strict Role-Based Access Control (RBAC), private data isolation, version history, in-app notification dispatch, and customized dashboards for **12 Requesters**, **3 Graphic Makers**, **1 Lead Approver**, and **1 Super Admin**.
 
