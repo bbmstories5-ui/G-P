@@ -41,21 +41,24 @@ function resolveLiveLoginUrl(inputUrl: string): string {
   return inputUrl;
 }
 
-// Custom DNS lookup that strictly forces IPv4 (family: 4) to eliminate Railway/Docker IPv6 ENETUNREACH
-const ipv4Lookup = (hostname: string, options: any, callback: any) => {
-  return dns.lookup(hostname, { family: 4 }, callback);
-};
-
-function createTransporter(smtpUser: string, smtpPass: string, port = 465): Transporter {
+async function createTransporter(smtpUser: string, smtpPass: string, port = 465): Promise<Transporter> {
   const cleanPass = smtpPass.replace(/\s+/g, '');
   
-  // Enforce IPv4 via custom lookup & family 4 to prevent IPv6 routing failures on Railway
+  // Directly resolve IPv4 address for smtp.gmail.com to completely bypass IPv6 ENETUNREACH on Railway
+  let targetHost = 'smtp.gmail.com';
+  try {
+    const ipv4Addresses = await dns.promises.resolve4('smtp.gmail.com');
+    if (ipv4Addresses && ipv4Addresses.length > 0) {
+      targetHost = ipv4Addresses[0];
+    }
+  } catch (dnsErr) {
+    console.warn('[SMTP DNS] resolve4 fallback:', dnsErr);
+  }
+
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    host: targetHost,
     port: port,
     secure: port === 465,
-    family: 4,
-    lookup: ipv4Lookup,
     auth: {
       user: smtpUser,
       pass: cleanPass,
@@ -64,9 +67,9 @@ function createTransporter(smtpUser: string, smtpPass: string, port = 465): Tran
       servername: 'smtp.gmail.com',
       rejectUnauthorized: false,
     },
-    connectionTimeout: 12000,
-    greetingTimeout: 10000,
-    socketTimeout: 20000,
+    connectionTimeout: 10000,
+    greetingTimeout: 8000,
+    socketTimeout: 15000,
   } as any);
 }
 
@@ -309,7 +312,7 @@ export async function sendInvitationEmail({
   }
 
   try {
-    let transporter = createTransporter(smtpUser, smtpPass);
+    let transporter = await createTransporter(smtpUser, smtpPass, 465);
     const info = await transporter.sendMail({
       from: `"${cleanSenderName}" <${smtpUser}>`,
       replyTo: smtpUser,
@@ -324,7 +327,7 @@ export async function sendInvitationEmail({
   } catch (err: any) {
     console.warn(`[EMAIL DISPATCH PORT 465 FAILED] Retrying with Port 587 STARTTLS IPv4:`, err.message);
     try {
-      const fallbackTransporter = createTransporter(smtpUser, smtpPass, 587);
+      const fallbackTransporter = await createTransporter(smtpUser, smtpPass, 587);
       const fallbackInfo = await fallbackTransporter.sendMail({
         from: `"Creative Portal" <${smtpUser}>`,
         replyTo: smtpUser,
