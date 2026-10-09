@@ -219,6 +219,28 @@ function synthesizeTone(
   }
 }
 
+// Cached HTML5 Audio element for instant low-latency playback
+let cachedAudio: HTMLAudioElement | null = null;
+
+function getNotificationAudio(): HTMLAudioElement | null {
+  if (typeof window === 'undefined') return null;
+  if (!cachedAudio) {
+    try {
+      cachedAudio = new Audio('/sounds/notification.m4a');
+      cachedAudio.preload = 'auto';
+      // Fallback source check
+      cachedAudio.onerror = () => {
+        if (cachedAudio && cachedAudio.src.endsWith('.m4a')) {
+          cachedAudio.src = '/sounds/notification.m4r';
+        }
+      };
+    } catch (e) {
+      console.warn('Audio object initialization warning:', e);
+    }
+  }
+  return cachedAudio;
+}
+
 /**
  * Loads sound preferences from storage
  */
@@ -253,7 +275,7 @@ export function markInitialNotificationsSeen(ids: string[]) {
 }
 
 /**
- * Plays notification chime if permitted by user settings & deduplication rules
+ * Plays custom notification chime (/sounds/notification.m4r / .m4a) with Web Audio fallback
  */
 export function playNotificationSound(notification?: {
   id?: string;
@@ -282,6 +304,26 @@ export function playNotificationSound(notification?: {
     notification?.type === 'URGENT' ||
     notification?.type === 'REVISION_REQUESTED';
 
+  // Primary: Play custom Apple alert tone from /sounds/notification.m4a / .m4r
+  const audio = getNotificationAudio();
+  if (audio) {
+    try {
+      audio.currentTime = 0;
+      audio.volume = prefs.volume === 'LOW' ? 0.3 : prefs.volume === 'HIGH' ? 1.0 : 0.65;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // Autoplay policy or format fallback -> synthesize Web Audio tone
+          synthesizeTone(prefs.preset, prefs.volume, isUrgent);
+        });
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+
+  // Fallback: Web Audio API synthesis
   synthesizeTone(prefs.preset, prefs.volume, isUrgent);
 }
 
@@ -290,5 +332,14 @@ export function playNotificationSound(notification?: {
  */
 export function previewNotificationSound(preset: SoundPreset, volume: SoundVolume) {
   unlockAudioContext();
+  const audio = getNotificationAudio();
+  if (audio) {
+    try {
+      audio.currentTime = 0;
+      audio.volume = volume === 'LOW' ? 0.3 : volume === 'HIGH' ? 1.0 : 0.65;
+      audio.play().catch(() => synthesizeTone(preset, volume, false));
+      return;
+    } catch { }
+  }
   synthesizeTone(preset, volume, false);
 }
