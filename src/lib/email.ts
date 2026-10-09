@@ -31,42 +31,25 @@ function resolveLiveLoginUrl(inputUrl: string): string {
   return inputUrl;
 }
 
-// Cached singleton transporter with connection pooling for ultra-fast delivery
-let cachedTransporter: Transporter | null = null;
-let lastSmtpConfigKey = '';
-
-function getPooledTransporter(smtpUser: string, smtpPass: string): Transporter {
-  const currentKey = `${smtpUser}:${smtpPass}`;
-  if (cachedTransporter && lastSmtpConfigKey === currentKey) {
-    return cachedTransporter;
-  }
-
-  // Cloud/Railway-optimized SMTP with explicit IPv4 (family: 4) & Port 587 STARTTLS
-  cachedTransporter = nodemailer.createTransport({
+function createTransporter(smtpUser: string, smtpPass: string): Transporter {
+  const cleanPass = smtpPass.replace(/\s+/g, '');
+  
+  // Direct SSL (port 465) is fastest and most reliable for Gmail in cloud/Docker environments
+  return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use STARTTLS for maximum cloud container compatibility
-    requireTLS: true,
-    family: 4, // Prevent IPv6 timeout on Railway/Docker
-    pool: true, // Reuse TCP/TLS connections
-    maxConnections: 5,
-    maxMessages: 100,
-    rateDelta: 1000,
-    rateLimit: 10,
-    connectionTimeout: 7000,
-    greetingTimeout: 5000,
-    socketTimeout: 10000,
+    port: 465,
+    secure: true,
     auth: {
       user: smtpUser,
-      pass: smtpPass.replace(/\s+/g, ''),
+      pass: cleanPass,
     },
     tls: {
       rejectUnauthorized: false,
     },
-  } as any);
-
-  lastSmtpConfigKey = currentKey;
-  return cachedTransporter;
+    connectionTimeout: 10000,
+    greetingTimeout: 8000,
+    socketTimeout: 15000,
+  });
 }
 
 export async function sendInvitationEmail({
@@ -91,7 +74,7 @@ export async function sendInvitationEmail({
   }
 
   try {
-    const transporter = getPooledTransporter(smtpUser, smtpPass);
+    let transporter = createTransporter(smtpUser, smtpPass);
 
     const cleanSenderName = 'Creative Portal';
     const subject = `Welcome to Creative Portal - Account Invitation`;

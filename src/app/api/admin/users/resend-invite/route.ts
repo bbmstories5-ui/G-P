@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     });
 
     const timeoutPromise = new Promise<{ success: boolean; messageId?: string; error?: string }>((resolve) =>
-      setTimeout(() => resolve({ success: false, error: 'Email dispatch timed out on cloud server' }), 6000)
+      setTimeout(() => resolve({ success: false, error: 'Email dispatch timed out on cloud server' }), 18000)
     );
 
     const result = await Promise.race([emailPromise, timeoutPromise]);
