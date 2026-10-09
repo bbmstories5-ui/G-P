@@ -352,18 +352,45 @@ export default function AdminUsersPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
-                        {u.role !== 'ADMIN' && (
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleToggleStatus(u.id, u.status)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
-                              u.status === 'ACTIVE'
-                                ? 'bg-white border-slate-300 text-slate-600 hover:text-rose-600 hover:border-rose-300'
-                                : 'bg-emerald-600 text-white border-emerald-600'
-                            }`}
+                            onClick={async () => {
+                              try {
+                                const res = await fetch('/api/admin/users/resend-invite', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ userId: u.id }),
+                                });
+                                const d = await res.json();
+                                if (d.success) {
+                                  alert(`✅ Invitation email resent successfully to ${u.email}`);
+                                } else {
+                                  alert(`❌ Failed to resend: ${d.error || 'Check SMTP configuration'}`);
+                                }
+                              } catch (e: any) {
+                                alert('Error resending email');
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-700 transition-colors inline-flex items-center gap-1.5"
+                            title="Resend email with login link to this member"
                           >
-                            {u.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                            <Mail className="w-3.5 h-3.5 text-purple-600" />
+                            <span className="hidden sm:inline">Resend Email</span>
                           </button>
-                        )}
+
+                          {u.role !== 'ADMIN' && (
+                            <button
+                              onClick={() => handleToggleStatus(u.id, u.status)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                                u.status === 'ACTIVE'
+                                  ? 'bg-white border-slate-300 text-slate-600 hover:text-rose-600 hover:border-rose-300'
+                                  : 'bg-emerald-600 text-white border-emerald-600'
+                              }`}
+                            >
+                              {u.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
