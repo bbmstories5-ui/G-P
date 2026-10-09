@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { sendInvitationEmail } from '@/lib/email';
 
 export async function GET(req: NextRequest) {
   try {
@@ -147,10 +148,26 @@ export async function POST(req: NextRequest) {
 
     const loginUrl = `${protocol}://${host}${roleLoginPath}?email=${encodeURIComponent(cleanEmail)}`;
 
+    // Dispatch real email via Google Gmail SMTP if configured
+    let emailResult = null;
+    try {
+      emailResult = await sendInvitationEmail({
+        toEmail: cleanEmail,
+        recipientName: name,
+        role,
+        identifier: calculatedCode || role,
+        password,
+        loginUrl,
+      });
+    } catch (emailErr) {
+      console.error('Email sending failed (non-blocking):', emailErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: `User ${name} invited successfully!`,
       user: newUser,
+      emailDispatched: emailResult?.success ?? false,
       credentials: {
         email: cleanEmail,
         password,
