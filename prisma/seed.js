@@ -13,13 +13,26 @@ async function main() {
   console.log('--- INITIALIZING DATABASE & SEEDING 17 ACCOUNTS ---');
 
   const passwordHash = await bcrypt.hash('password123', 10);
+  const superAdminPasswordHash = await bcrypt.hash('12345678', 10);
 
-  // 1. Create Super Admin (1)
+  // 1. Create Super Admin (Dhruvit Rajput)
+  await prisma.user.create({
+    data: {
+      email: 'dhruviktra.rajput.1379@gmail.com',
+      password: superAdminPasswordHash,
+      name: 'Dhruvit Rajput (Super Admin)',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    },
+  });
+
+  // Secondary demo admin
   await prisma.user.create({
     data: {
       email: 'admin@company.com',
       password: passwordHash,
-      name: 'Super Admin',
+      name: 'Super Admin (System)',
       role: 'ADMIN',
       status: 'ACTIVE',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',

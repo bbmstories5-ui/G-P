@@ -7,6 +7,7 @@ import { getTabSessionId, saveTabAuth } from '@/lib/tabAuth';
 
 export const ALL_USERS = [
   // Super Admin
+  { email: 'dhruviktra.rajput.1379@gmail.com', name: 'Dhruvit Rajput', role: 'ADMIN', badge: 'Super Admin' },
   { email: 'admin@company.com', name: 'Super Admin', role: 'ADMIN', badge: 'System Master' },
   // Approver
   { email: 'approver@company.com', name: 'Elena Rostova', role: 'APPROVER', badge: 'Brand Approver' },
