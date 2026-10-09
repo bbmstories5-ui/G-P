@@ -153,10 +153,10 @@ export async function POST(req: NextRequest) {
 
     const loginUrl = `${baseUrl.replace(/\/$/, '')}${roleLoginPath}?email=${encodeURIComponent(cleanEmail)}`;
 
-    // Dispatch real email via Google Gmail SMTP if configured with safety timeout
+    // Dispatch real email via Resend HTTPS API (non-blocking for user creation)
     let emailResult: any = null;
     try {
-      const emailPromise = sendInvitationEmail({
+      emailResult = await sendInvitationEmail({
         toEmail: cleanEmail,
         recipientName: name,
         role,
@@ -164,12 +164,6 @@ export async function POST(req: NextRequest) {
         password,
         loginUrl,
       });
-
-      const timeoutPromise = new Promise((resolve) =>
-        setTimeout(() => resolve({ success: false, error: 'Email dispatch timed out' }), 18000)
-      );
-
-      emailResult = await Promise.race([emailPromise, timeoutPromise]);
     } catch (emailErr) {
       console.error('Email sending failed (non-blocking):', emailErr);
     }

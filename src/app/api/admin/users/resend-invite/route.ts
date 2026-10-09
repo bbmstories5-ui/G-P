@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     const protocol = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_BASE_URL ||
       process.env.APP_URL ||
       (host.includes('localhost') ? 'https://portal-grap.up.railway.app' : `${protocol}://${host}`);
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       user.designerProfile?.designerCode ||
       (user.role === 'APPROVER' ? 'Lead Approver' : 'Super Admin');
 
-    const emailPromise = sendInvitationEmail({
+    const result = await sendInvitationEmail({
       toEmail: user.email,
       recipientName: user.name,
       role: user.role,
@@ -52,16 +53,11 @@ export async function POST(req: NextRequest) {
       loginUrl,
     });
 
-    const timeoutPromise = new Promise<{ success: boolean; messageId?: string; error?: string }>((resolve) =>
-      setTimeout(() => resolve({ success: false, error: 'Email dispatch timed out on cloud server' }), 18000)
-    );
-
-    const result = await Promise.race([emailPromise, timeoutPromise]);
-
     return NextResponse.json({
       success: result.success,
       messageId: result.messageId,
       error: result.error,
+      code: result.code,
     });
   } catch (error: any) {
     console.error('Error resending invitation:', error);

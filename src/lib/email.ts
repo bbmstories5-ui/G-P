@@ -1,16 +1,6 @@
-import nodemailer, { Transporter } from 'nodemailer';
-import dns from 'dns';
+import { Resend } from 'resend';
 
-// Force IPv4 DNS resolution across Node.js runtime (fixes Railway/Docker IPv6 ENETUNREACH)
-try {
-  if (dns && typeof (dns as any).setDefaultResultOrder === 'function') {
-    (dns as any).setDefaultResultOrder('ipv4first');
-  }
-} catch (e) {
-  // Ignore in environments where not supported
-}
-
-interface SendInvitationEmailParams {
+export interface SendInvitationEmailParams {
   toEmail: string;
   recipientName: string;
   role: string;
@@ -19,12 +9,21 @@ interface SendInvitationEmailParams {
   loginUrl: string;
 }
 
+export interface EmailDispatchResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  code?: 'MISSING_API_KEY' | 'UNVERIFIED_DOMAIN_RESTRICTION' | 'INVALID_RECIPIENT' | 'PROVIDER_ERROR' | 'SUCCESS';
+  details?: any;
+}
+
 /**
- * Resolves the public live domain for email links
+ * Resolves the public live domain for email invitation links
  */
-function resolveLiveLoginUrl(inputUrl: string): string {
+export function resolveLiveLoginUrl(inputUrl: string): string {
   const configuredAppUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
     process.env.APP_URL ||
     (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
 
@@ -33,7 +32,7 @@ function resolveLiveLoginUrl(inputUrl: string): string {
     return inputUrl.replace(/^http:\/\/(localhost|127\.0\.0\.1):\d+/, cleanAppUrl);
   }
 
-  // Fallback to official Railway live deployment if sent from local machine
+  // Fallback to official Railway live deployment if sent from local test
   if (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1')) {
     return inputUrl.replace(/^http:\/\/(localhost|127\.0\.0\.1):\d+/, 'https://portal-grap.up.railway.app');
   }
@@ -41,57 +40,32 @@ function resolveLiveLoginUrl(inputUrl: string): string {
   return inputUrl;
 }
 
-async function createTransporter(smtpUser: string, smtpPass: string, port = 465): Promise<Transporter> {
-  const cleanPass = smtpPass.replace(/\s+/g, '');
-  
-  // Directly resolve IPv4 address for smtp.gmail.com to completely bypass IPv6 ENETUNREACH on Railway
-  let targetHost = 'smtp.gmail.com';
-  try {
-    const ipv4Addresses = await dns.promises.resolve4('smtp.gmail.com');
-    if (ipv4Addresses && ipv4Addresses.length > 0) {
-      targetHost = ipv4Addresses[0];
-    }
-  } catch (dnsErr) {
-    console.warn('[SMTP DNS] resolve4 fallback:', dnsErr);
-  }
-
-  return nodemailer.createTransport({
-    host: targetHost,
-    port: port,
-    secure: port === 465,
-    auth: {
-      user: smtpUser,
-      pass: cleanPass,
-    },
-    tls: {
-      servername: 'smtp.gmail.com',
-      rejectUnauthorized: false,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 8000,
-    socketTimeout: 15000,
-  } as any);
+/**
+ * Validates email format
+ */
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-export async function sendInvitationEmail({
-  toEmail,
+/**
+ * Generates modern White Minimalist invitation HTML with animated shimmer bar
+ */
+function generateInvitationHtml({
   recipientName,
   role,
   identifier,
+  toEmail,
   password,
-  loginUrl: rawLoginUrl,
-}: SendInvitationEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Creative Portal';
-
-  const loginUrl = resolveLiveLoginUrl(rawLoginUrl);
-
-  const cleanSenderName = 'Creative Portal';
-  const subject = `Welcome to Creative Portal - Account Invitation`;
-
-  const htmlContent = `
+  loginUrl,
+}: {
+  recipientName: string;
+  role: string;
+  identifier: string;
+  toEmail: string;
+  password: string;
+  loginUrl: string;
+}): string {
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -275,72 +249,104 @@ export async function sendInvitationEmail({
     </body>
     </html>
   `;
+}
 
-  // 1. If RESEND_API_KEY is configured, dispatch via HTTPS Port 443 (100% cloud firewall proof)
-  if (resendApiKey) {
-    try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'Creative Portal <onboarding@resend.dev>',
-          to: [toEmail],
-          subject,
-          html: htmlContent,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        console.log(`[EMAIL DISPATCH SUCCESS (RESEND HTTP)] Sent to ${toEmail}. ID: ${data.id}`);
-        return { success: true, messageId: data.id };
-      } else {
-        console.warn(`[RESEND HTTP WARNING] ${data.message || 'Falling back to SMTP'}`);
-      }
-    } catch (resendErr: any) {
-      console.warn(`[RESEND HTTP ERROR] ${resendErr.message}`);
-    }
+/**
+ * Main transactional email dispatcher using official Resend HTTPS API (Port 443)
+ */
+export async function sendInvitationEmail({
+  toEmail,
+  recipientName,
+  role,
+  identifier,
+  password,
+  loginUrl: rawLoginUrl,
+}: SendInvitationEmailParams): Promise<EmailDispatchResult> {
+  const cleanEmail = toEmail.trim().toLowerCase();
+
+  // Validate recipient format
+  if (!isValidEmail(cleanEmail)) {
+    return {
+      success: false,
+      error: `Invalid recipient email address format: ${cleanEmail}`,
+      code: 'INVALID_RECIPIENT',
+    };
   }
 
-  // 2. If SMTP credentials are missing, return simulated success
-  if (!smtpUser || !smtpPass) {
-    console.log(`[EMAIL DISPATCH SIMULATION] Real SMTP not set. Invitation for ${toEmail} (${recipientName}):`);
-    console.log(`Email: ${toEmail} | Password: ${password} | Role: ${role} | Live URL: ${loginUrl}`);
-    return { success: true, messageId: 'simulated-' + Date.now() };
+  const resendApiKey = process.env.RESEND_API_KEY;
+
+  // If RESEND_API_KEY is not configured, report simulated mode safely
+  if (!resendApiKey) {
+    console.log(`[RESEND SIMULATION] RESEND_API_KEY not configured. Invitation simulated for ${cleanEmail}:`);
+    console.log(`Password: ${password} | Role: ${role} | URL: ${rawLoginUrl}`);
+    return {
+      success: true,
+      messageId: `simulated-${Date.now()}`,
+      code: 'MISSING_API_KEY',
+    };
   }
+
+  const fromSender = process.env.EMAIL_FROM || 'Creative Portal <onboarding@resend.dev>';
+  const replyTo = process.env.EMAIL_REPLY_TO || undefined;
+  const loginUrl = resolveLiveLoginUrl(rawLoginUrl);
+  const subject = `Welcome to Creative Portal - Account Invitation`;
+
+  const htmlContent = generateInvitationHtml({
+    recipientName,
+    role,
+    identifier,
+    toEmail: cleanEmail,
+    password,
+    loginUrl,
+  });
+
+  const textContent = `Hello ${recipientName},\n\nYou have been invited to Creative Portal as a ${role}.\n\nYour Login Details:\nEmail: ${cleanEmail}\nPassword: ${password}\nRole: ${role} (${identifier})\n\nLog in here: ${loginUrl}\n\nBest regards,\nCreative Portal Team`;
 
   try {
-    let transporter = await createTransporter(smtpUser, smtpPass, 465);
-    const info = await transporter.sendMail({
-      from: `"${cleanSenderName}" <${smtpUser}>`,
-      replyTo: smtpUser,
-      to: toEmail,
+    const resend = new Resend(resendApiKey.trim());
+
+    const { data, error } = await resend.emails.send({
+      from: fromSender,
+      to: [cleanEmail],
+      replyTo,
       subject,
-      text: `Hello ${recipientName},\n\nYou have been invited to Creative Portal as a ${role}.\n\nYour Login Details:\nEmail: ${toEmail}\nPassword: ${password}\nRole: ${role} (${identifier})\n\nLog in here: ${loginUrl}\n\nBest regards,\nCreative Portal Team`,
       html: htmlContent,
+      text: textContent,
     });
 
-    console.log(`[EMAIL DISPATCH SUCCESS] Sent invitation to ${toEmail}. Message ID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
-  } catch (err: any) {
-    console.warn(`[EMAIL DISPATCH PORT 465 FAILED] Retrying with Port 587 STARTTLS IPv4:`, err.message);
-    try {
-      const fallbackTransporter = await createTransporter(smtpUser, smtpPass, 587);
-      const fallbackInfo = await fallbackTransporter.sendMail({
-        from: `"Creative Portal" <${smtpUser}>`,
-        replyTo: smtpUser,
-        to: toEmail,
-        subject: `Welcome to Creative Portal - Account Invitation`,
-        text: `Hello ${recipientName},\n\nYou have been invited to Creative Portal as a ${role}.\n\nYour Login Details:\nEmail: ${toEmail}\nPassword: ${password}\nRole: ${role} (${identifier})\n\nLog in here: ${loginUrl}\n\nBest regards,\nCreative Portal Team`,
-        html: `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;background:#f8fafc;"><div style="max-width:520px;margin:0 auto;background:#fff;padding:24px;border-radius:12px;border:1px solid #e2e8f0;"><h2>Welcome to Creative Portal</h2><p>Hello <strong>${recipientName}</strong>, you have been invited as <strong>${role}</strong>.</p><p><strong>Email:</strong> ${toEmail}<br><strong>Password:</strong> ${password}</p><p><a href="${loginUrl}" style="display:inline-block;padding:12px 24px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;">Log In Now</a></p></div></body></html>`,
-      });
-      console.log(`[EMAIL DISPATCH SUCCESS VIA FALLBACK 587] Sent to ${toEmail}. Message ID: ${fallbackInfo.messageId}`);
-      return { success: true, messageId: fallbackInfo.messageId };
-    } catch (fallbackErr: any) {
-      console.error(`[EMAIL DISPATCH COMPLETELY FAILED] Error sending to ${toEmail}:`, fallbackErr);
-      return { success: false, error: fallbackErr.message || err.message };
+    if (error) {
+      console.warn(`[RESEND DISPATCH FAILED] Error for ${cleanEmail}:`, error.message);
+
+      // Check specifically for free sandbox testing restriction
+      const isDomainRestriction =
+        error.message.includes('only send testing emails') ||
+        error.message.includes('verify a domain') ||
+        error.message.includes('domain is not verified');
+
+      return {
+        success: false,
+        error: isDomainRestriction
+          ? `Resend Free Sandbox: Can only send to account owner email or requires verified domain at resend.com/domains`
+          : error.message,
+        code: isDomainRestriction ? 'UNVERIFIED_DOMAIN_RESTRICTION' : 'PROVIDER_ERROR',
+        details: error,
+      };
     }
+
+    const messageId = data?.id || `resend-${Date.now()}`;
+    console.log(`[RESEND DISPATCH SUCCESS] Delivered to ${cleanEmail} (ID: ${messageId})`);
+
+    return {
+      success: true,
+      messageId,
+      code: 'SUCCESS',
+    };
+  } catch (err: any) {
+    console.error(`[RESEND SDK EXCEPTION] Error sending to ${cleanEmail}:`, err.message);
+    return {
+      success: false,
+      error: err.message || 'Unknown network error occurred while dispatching email via Resend',
+      code: 'PROVIDER_ERROR',
+    };
   }
 }
