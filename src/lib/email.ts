@@ -41,25 +41,32 @@ function resolveLiveLoginUrl(inputUrl: string): string {
   return inputUrl;
 }
 
+// Custom DNS lookup that strictly forces IPv4 (family: 4) to eliminate Railway/Docker IPv6 ENETUNREACH
+const ipv4Lookup = (hostname: string, options: any, callback: any) => {
+  return dns.lookup(hostname, { family: 4 }, callback);
+};
+
 function createTransporter(smtpUser: string, smtpPass: string, port = 465): Transporter {
   const cleanPass = smtpPass.replace(/\s+/g, '');
   
-  // Enforce IPv4 (family: 4) to prevent IPv6 routing failures on Railway/Docker
+  // Enforce IPv4 via custom lookup & family 4 to prevent IPv6 routing failures on Railway
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: port,
     secure: port === 465,
     family: 4,
+    lookup: ipv4Lookup,
     auth: {
       user: smtpUser,
       pass: cleanPass,
     },
     tls: {
+      servername: 'smtp.gmail.com',
       rejectUnauthorized: false,
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 8000,
-    socketTimeout: 15000,
+    connectionTimeout: 12000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
   } as any);
 }
 
