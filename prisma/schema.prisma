@@ -1,0 +1,324 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String
+  name             String
+  role             String            // REQUESTER | DESIGNER | APPROVER | ADMIN
+  avatar           String?
+  status           String            @default("ACTIVE") // ACTIVE | SUSPENDED
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  requesterProfile RequesterProfile?
+  designerProfile  DesignerProfile?
+  approverProfile  ApproverProfile?
+
+  createdRequests  Requirement[]     @relation("RequesterRequirements")
+  assignedRequests Requirement[]     @relation("DesignerRequirements")
+  approvedRequests Requirement[]     @relation("ApproverRequirements")
+  
+  assignments      DesignerAssignment[]
+  graphics         Graphic[]
+  approvals        Approval[]
+  revisions        Revision[]
+  comments         Comment[]
+  notifications    Notification[]
+  activityLogs     ActivityLog[]
+  sessions         Session[]
+}
+
+model Session {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tabSessionId   String?
+  sessionToken   String    @unique
+  refreshToken   String?
+  userAgent      String?
+  ipAddress      String?
+  deviceInfo     String?
+  isRevoked      Boolean   @default(false)
+  revokedAt      DateTime?
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([sessionToken])
+  @@index([tabSessionId])
+}
+
+model RequesterProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberCode  String   @unique // e.g., "Member 01", "Member 02", ...
+  department  String   @default("Marketing")
+  phone       String?
+}
+
+model DesignerProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  designerCode   String   @unique // e.g., "Designer 01", "Designer 02", "Designer 03"
+  specialty      String   @default("Social Media & Branding")
+  activeCapacity Int      @default(5)
+}
+
+model ApproverProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String   @default("Creative Director & Brand Lead")
+  department String   @default("Brand Governance")
+}
+
+model Requirement {
+  id                     String            @id @default(uuid())
+  reqCode                String            @unique // e.g. REQ-0001
+  requesterId            String
+  requester              User              @relation("RequesterRequirements", fields: [requesterId], references: [id])
+  
+  title                  String
+  description            String
+  category               String            @default("Social Media") // Social Media, Banner, Branding, Print, UI, Ad Creative
+  platform               String            @default("Instagram")    // Instagram, Facebook, LinkedIn, Twitter, YouTube, Website, Print
+  dimensions             String            @default("1080x1080")
+  priority               String            @default("MEDIUM")       // LOW, MEDIUM, HIGH, URGENT
+  deadline               DateTime
+  status                 String            @default("PENDING")      
+  // Workflow statuses: DRAFT, PENDING, ASSIGNED, IN_DESIGN, PENDING_APPROVAL, REVISION_REQUIRED, RESUBMITTED, FINAL_APPROVED, COMPLETED, REJECTED, CANCELLED
+  
+  additionalInstructions String?
+  
+  assignedDesignerId     String?
+  assignedDesigner       User?             @relation("DesignerRequirements", fields: [assignedDesignerId], references: [id])
+  
+  approvedById           String?
+  approvedBy             User?             @relation("ApproverRequirements", fields: [approvedById], references: [id])
+  
+  finalGraphicId         String?           @unique
+  finalGraphic           Graphic?          @relation("FinalRequirementGraphic", fields: [finalGraphicId], references: [id])
+  
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  files                  RequirementFile[]
+  assignments            DesignerAssignment[]
+  graphics               Graphic[]         @relation("RequirementGraphics")
+  approvals              Approval[]
+  revisions              Revision[]
+  comments               Comment[]
+  activityLogs           ActivityLog[]
+
+  @@index([requesterId])
+  @@index([assignedDesignerId])
+  @@index([approvedById])
+  @@index([status])
+  @@index([createdAt])
+  @@index([priority])
+}
+
+model RequirementFile {
+  id            String      @id @default(uuid())
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileUrl       String
+  fileType      String
+  fileSize      Int
+  isReference   Boolean     @default(true)
+  uploadedAt    DateTime    @default(now())
+
+  @@index([requirementId])
+}
+
+model DesignerAssignment {
+  id            String      @id @default(uuid())
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  designerId    String
+  designer      User        @relation(fields: [designerId], references: [id])
+  assignedAt    DateTime    @default(now())
+  status        String      @default("ACTIVE") // ACTIVE, RELEASED, COMPLETED
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  @@index([requirementId])
+  @@index([designerId])
+  @@index([status])
+}
+
+model Graphic {
+  id                 String           @id @default(uuid())
+  requirementId      String
+  requirement        Requirement      @relation("RequirementGraphics", fields: [requirementId], references: [id], onDelete: Cascade)
+  finalRequirement   Requirement?     @relation("FinalRequirementGraphic")
+  designerId         String
+  designer           User             @relation(fields: [designerId], references: [id])
+  currentVersion     Int              @default(1)
+  status             String           @default("PENDING_APPROVAL")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  versions           GraphicVersion[]
+
+  @@index([requirementId])
+  @@index([designerId])
+  @@index([status])
+}
+
+model GraphicVersion {
+  id             String      @id @default(uuid())
+  graphicId      String
+  graphic        Graphic     @relation(fields: [graphicId], references: [id], onDelete: Cascade)
+  versionNumber  Int
+  fileUrl        String
+  previewUrl     String?
+  fileName       String
+  fileSize       Int
+  mimeType       String
+  dimensions     String?
+  designerNotes  String?
+  status         String      @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REVISION_REQUESTED, REJECTED
+  createdAt      DateTime    @default(now())
+
+  approvals      Approval[]
+  revisions      Revision[]
+
+  @@index([graphicId])
+  @@index([status])
+}
+
+model Approval {
+  id               String         @id @default(uuid())
+  requirementId    String
+  requirement      Requirement    @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  graphicVersionId String
+  graphicVersion   GraphicVersion @relation(fields: [graphicVersionId], references: [id], onDelete: Cascade)
+  approverId       String
+  approver         User           @relation(fields: [approverId], references: [id])
+  decision         String         // APPROVED | REVISION_REQUESTED | REJECTED
+  comments         String?
+  reviewedAt       DateTime       @default(now())
+
+  @@index([requirementId])
+  @@index([graphicVersionId])
+  @@index([approverId])
+}
+
+model Revision {
+  id               String         @id @default(uuid())
+  requirementId    String
+  requirement      Requirement    @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  graphicVersionId String
+  graphicVersion   GraphicVersion @relation(fields: [graphicVersionId], references: [id], onDelete: Cascade)
+  approverId       String
+  approver         User           @relation(fields: [approverId], references: [id])
+  revisionNumber   Int
+  feedback         String
+  requestedAt      DateTime       @default(now())
+  isResolved       Boolean        @default(false)
+
+  @@index([requirementId])
+  @@index([graphicVersionId])
+  @@index([approverId])
+}
+
+model Comment {
+  id            String      @id @default(uuid())
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User        @relation(fields: [authorId], references: [id])
+  authorRole    String
+  content       String
+  isInternal    Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  @@index([requirementId])
+  @@index([authorId])
+}
+
+model Notification {
+  id                   String    @id @default(uuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                String
+  message              String
+  type                 String    // INFO | SUCCESS | WARNING | URGENT | SYSTEM | WORKFLOW | REQUIREMENT_CREATED | ASSIGNED | SUBMITTED | REVISION_REQUESTED | APPROVED | REJECTED
+  priority             String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  actionUrl            String?
+  actionLabel          String?
+  entityType           String?   // REQUIREMENT | GRAPHIC | SYSTEM | USER
+  entityId             String?
+  relatedRequirementId String?
+  isRead               Boolean   @default(false)
+  readAt               DateTime?
+  isDismissed          Boolean   @default(false)
+  dismissedAt          DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([isDismissed])
+}
+
+model SystemNotice {
+  id           String    @id @default(uuid())
+  title        String
+  message      String
+  type         String    @default("SYSTEM") // INFO | SUCCESS | WARNING | URGENT | SYSTEM | WORKFLOW
+  priority     String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  targetRole   String    @default("ALL")    // ALL | REQUESTER | DESIGNER | APPROVER | ADMIN
+  targetUserId String?
+  actionUrl    String?
+  actionLabel  String?
+  startAt      DateTime  @default(now())
+  expiresAt    DateTime?
+  isActive     Boolean   @default(true)
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([targetRole])
+  @@index([isActive])
+}
+
+model ActivityLog {
+  id            String       @id @default(uuid())
+  requirementId String?
+  requirement   Requirement? @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName      String
+  userRole      String
+  action        String
+  details       String?
+  timestamp     DateTime     @default(now())
+
+  @@index([requirementId])
+  @@index([userId])
+  @@index([timestamp])
+}
+
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
