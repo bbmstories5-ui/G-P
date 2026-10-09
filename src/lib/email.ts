@@ -78,26 +78,17 @@ export async function sendInvitationEmail({
   password,
   loginUrl: rawLoginUrl,
 }: SendInvitationEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const resendApiKey = process.env.RESEND_API_KEY;
   const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
   const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Creative Portal';
 
   const loginUrl = resolveLiveLoginUrl(rawLoginUrl);
 
-  // If SMTP is not configured in environment variables, return simulated success
-  if (!smtpUser || !smtpPass) {
-    console.log(`[EMAIL DISPATCH SIMULATION] Real SMTP not set. Invitation for ${toEmail} (${recipientName}):`);
-    console.log(`Email: ${toEmail} | Password: ${password} | Role: ${role} | Live URL: ${loginUrl}`);
-    return { success: true, messageId: 'simulated-' + Date.now() };
-  }
+  const cleanSenderName = 'Creative Portal';
+  const subject = `Welcome to Creative Portal - Account Invitation`;
 
-  try {
-    let transporter = createTransporter(smtpUser, smtpPass);
-
-    const cleanSenderName = 'Creative Portal';
-    const subject = `Welcome to Creative Portal - Account Invitation`;
-
-    const htmlContent = `
+  const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -280,8 +271,45 @@ export async function sendInvitationEmail({
       </div>
     </body>
     </html>
-    `;
+  `;
 
+  // 1. If RESEND_API_KEY is configured, dispatch via HTTPS Port 443 (100% cloud firewall proof)
+  if (resendApiKey) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'Creative Portal <onboarding@resend.dev>',
+          to: [toEmail],
+          subject,
+          html: htmlContent,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        console.log(`[EMAIL DISPATCH SUCCESS (RESEND HTTP)] Sent to ${toEmail}. ID: ${data.id}`);
+        return { success: true, messageId: data.id };
+      } else {
+        console.warn(`[RESEND HTTP WARNING] ${data.message || 'Falling back to SMTP'}`);
+      }
+    } catch (resendErr: any) {
+      console.warn(`[RESEND HTTP ERROR] ${resendErr.message}`);
+    }
+  }
+
+  // 2. If SMTP credentials are missing, return simulated success
+  if (!smtpUser || !smtpPass) {
+    console.log(`[EMAIL DISPATCH SIMULATION] Real SMTP not set. Invitation for ${toEmail} (${recipientName}):`);
+    console.log(`Email: ${toEmail} | Password: ${password} | Role: ${role} | Live URL: ${loginUrl}`);
+    return { success: true, messageId: 'simulated-' + Date.now() };
+  }
+
+  try {
+    let transporter = createTransporter(smtpUser, smtpPass);
     const info = await transporter.sendMail({
       from: `"${cleanSenderName}" <${smtpUser}>`,
       replyTo: smtpUser,
