@@ -27,9 +27,8 @@ import StatusDonutChart from '@/components/analytics/StatusDonutChart';
 import MonthlyTrendChart from '@/components/analytics/MonthlyTrendChart';
 import DesignerComparisonChart from '@/components/analytics/DesignerComparisonChart';
 import LoadingSkeleton from '@/components/analytics/LoadingSkeleton';
+import CleanupApprovalModal from '@/components/admin/CleanupApprovalModal';
 import { tabFetch } from '@/lib/tabAuth';
-
-
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<any>(null);
@@ -38,17 +37,34 @@ export default function AdminDashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
 
+  // Graphics Auto-Deletion & Super Admin Approval State
+  const [cleanupData, setCleanupData] = useState<any>(null);
+  const [showCleanupModal, setShowCleanupModal] = useState(false);
+
   const fetchAnalytics = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
       setIsRefreshing(true);
-      const res = await tabFetch(`/api/analytics/admin?range=${range}`);
-      const json = await res.json();
+      const [res, cleanupRes] = await Promise.all([
+        tabFetch(`/api/analytics/admin?range=${range}`),
+        tabFetch('/api/admin/cleanup'),
+      ]);
+
       if (res.ok) {
+        const json = await res.json();
         setData(json);
       }
+
+      if (cleanupRes.ok) {
+        const cJson = await cleanupRes.json();
+        setCleanupData(cJson);
+        // Automatically show popup when approval is pending
+        if (cJson.pendingRequest && showLoading) {
+          setShowCleanupModal(true);
+        }
+      }
     } catch (e) {
-      console.error('Failed to load admin analytics:', e);
+      console.error('Failed to load admin analytics or cleanup status:', e);
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -126,6 +142,59 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* 15-Day Graphics Cleanup Notification Banner */}
+      {cleanupData && (
+        <div className={`rounded-2xl p-4.5 border transition-all ${cleanupData.pendingRequest
+            ? 'bg-gradient-to-r from-red-950/60 via-amber-950/40 to-slate-900 border-amber-500/60 shadow-lg shadow-amber-950/20'
+            : 'bg-slate-900 border-purple-900/40'
+          } flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-white`}>
+          <div className="flex items-start gap-3.5">
+            <div className={`p-2.5 rounded-xl shrink-0 ${cleanupData.pendingRequest
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+              }`}>
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${cleanupData.pendingRequest
+                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                  }`}>
+                  Cycle #{cleanupData.activeCycle?.cycleNumber || 1} • {cleanupData.pendingRequest ? 'Approval Required' : 'Countdown Active'}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {cleanupData.metrics?.totalGraphicsStored || 0} graphics ({cleanupData.metrics?.formattedStorageUsed || '0 Bytes'}) stored
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white mt-0.5">
+                {cleanupData.pendingRequest
+                  ? `⚠️ 15-Day Period Ended: ${cleanupData.pendingRequest.graphicsCount} graphics queued for deletion. Approval pending.`
+                  : `Next Auto-Cleanup Review: ${cleanupData.countdown?.days || 0}d ${cleanupData.countdown?.hours || 0}h remaining`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+            {cleanupData.pendingRequest && (
+              <button
+                onClick={() => setShowCleanupModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                Review &amp; Approve
+              </button>
+            )}
+            <Link
+              href="/admin/cleanup"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+            >
+              Cleanup Center <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
+
 
       {/* Role Counts Summary Bar */}
       <div className="grid grid-cols-3 gap-3">
@@ -396,6 +465,18 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Auto-Popup Cleanup Approval Modal for Super Admin */}
+      {cleanupData?.pendingRequest && (
+        <CleanupApprovalModal
+          request={cleanupData.pendingRequest}
+          isOpen={showCleanupModal}
+          onClose={() => setShowCleanupModal(false)}
+          onSuccess={() => {
+            fetchAnalytics(false);
+          }}
+        />
       )}
     </div>
   );

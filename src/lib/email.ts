@@ -643,4 +643,78 @@ export async function sendPasswordResetEmail({
   };
 }
 
+export interface SendSystemNotificationEmailParams {
+  to: string;
+  recipientName: string;
+  title: string;
+  message: string;
+  actionUrl?: string;
+  actionLabel?: string;
+}
+
+export async function sendSystemNotificationEmail({
+  to,
+  recipientName,
+  title,
+  message,
+  actionUrl,
+  actionLabel = 'Open Admin Portal',
+}: SendSystemNotificationEmailParams): Promise<EmailDispatchResult> {
+  const cleanEmail = to.trim().toLowerCase();
+  if (!isValidEmail(cleanEmail)) {
+    return { success: false, error: `Invalid recipient email format: ${cleanEmail}` };
+  }
+
+  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
+  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
+  const liveActionUrl = actionUrl ? resolveLiveLoginUrl(actionUrl) : '';
+  const subject = `[SYSTEM ALERT] ${title}`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><title>${title}</title></head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; margin: 0; padding: 24px;">
+      <div style="max-width: 580px; margin: 0 auto; background: #1e293b; border-radius: 16px; border: 1px solid #334155; padding: 32px; color: #f8fafc;">
+        <div style="display: inline-block; padding: 4px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 9999px; color: #f87171; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px;">
+          System Governance Notice
+        </div>
+        <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #ffffff;">${title}</h2>
+        <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; white-space: pre-line;">${message}</p>
+        ${
+          liveActionUrl
+            ? `<div style="margin-top: 24px;">
+                 <a href="${liveActionUrl}" style="display: inline-block; background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">${actionLabel} &rarr;</a>
+               </div>`
+            : ''
+        }
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 24px 0;" />
+        <p style="color: #64748b; font-size: 12px; margin: 0;">This is an automated system notification from Creative Flow Enterprise Governance System.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  if (smtpUser && smtpPass) {
+    try {
+      const transporter = createGmailTransporter(smtpUser, smtpPass);
+      const info = await transporter.sendMail({
+        from: `"Creative Portal Alert" <${smtpUser}>`,
+        replyTo: smtpUser,
+        to: cleanEmail,
+        subject,
+        text: `${title}\n\n${message}\n\n${liveActionUrl || ''}`,
+        html: htmlContent,
+      });
+      return { success: true, messageId: info.messageId, code: 'GMAIL_SUCCESS' };
+    } catch (err: any) {
+      console.error('[CLEANUP NOTIFICATION EMAIL FAILED]', err.message);
+      return { success: false, error: err.message, code: 'CONNECTION_ERROR' };
+    }
+  }
+
+  return { success: false, error: 'SMTP configuration missing' };
+}
+
+
 

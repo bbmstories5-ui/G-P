@@ -161,6 +161,7 @@ export default function Sidebar({ user: initialUser }: SidebarProps) {
       { label: 'Assignments', href: '/admin/assignments', icon: FileText },
     ],
     projects: [
+      { label: 'Graphics Cleanup', href: '/admin/cleanup', color: 'bg-[#FCA5A5]' },
       { label: 'Analytics Reports', href: '/admin/reports', color: 'bg-[#A7F3D0]' },
       { label: 'System Settings', href: '/admin/settings', color: 'bg-[#C7D2FE]' },
       { label: 'Governance Logs', href: '/admin/activity-logs', color: 'bg-[#E9D5FF]' },
@@ -253,11 +254,10 @@ export default function Sidebar({ user: initialUser }: SidebarProps) {
                         key={item.href}
                         href={getScopedHref(item.href, user)}
                         onClick={() => setIsMobileOpen(false)}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${
-                          isActive
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all ${isActive
                             ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <Icon className="w-4 h-4 text-slate-500 stroke-[1.8]" />
@@ -286,11 +286,10 @@ export default function Sidebar({ user: initialUser }: SidebarProps) {
                         key={item.href}
                         href={getScopedHref(item.href, user)}
                         onClick={() => setIsMobileOpen(false)}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${
-                          isActive
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all ${isActive
                             ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         <Icon className="w-4 h-4 text-slate-500 stroke-[1.8]" />
                         <span>{item.label}</span>
@@ -313,11 +312,10 @@ export default function Sidebar({ user: initialUser }: SidebarProps) {
                         key={proj.href}
                         href={getScopedHref(proj.href, user)}
                         onClick={() => setIsMobileOpen(false)}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-colors ${
-                          isActive
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-colors ${isActive
                             ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         <span className={`w-3.5 h-3.5 rounded-md ${proj.color} shrink-0`} />
                         <span>{proj.label}</span>
@@ -357,405 +355,404 @@ export default function Sidebar({ user: initialUser }: SidebarProps) {
       {/* DESKTOP ASIDE (hidden on mobile, visible lg:flex)         */}
       {/* ========================================================= */}
       <aside
-        className={`hidden lg:flex relative select-none z-40 transition-all duration-300 ease-in-out flex-col justify-between shrink-0 p-3 h-screen max-h-screen ${
-          isCollapsed ? 'w-[74px]' : 'w-[250px]'
-        }`}
+        className={`hidden lg:flex relative select-none z-40 transition-all duration-300 ease-in-out flex-col justify-between shrink-0 p-3 h-screen max-h-screen ${isCollapsed ? 'w-[74px]' : 'w-[250px]'
+          }`}
       >
         {/* Floating White Card (Exact proportions, perfectly padded at bottom) */}
         <div className="bg-white rounded-[24px] shadow-[0_2px_14px_rgba(0,0,0,0.04)] border border-slate-200/90 flex flex-col justify-between h-full relative py-3 px-2">
 
 
-        {/* OUTSIDE CENTER COLLAPSE TOGGLE */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white hover:bg-slate-50 border border-slate-200 shadow-md rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all duration-150 hover:scale-110 active:scale-95 z-50 cursor-pointer"
-          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
+          {/* OUTSIDE CENTER COLLAPSE TOGGLE */}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white hover:bg-slate-50 border border-slate-200 shadow-md rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all duration-150 hover:scale-110 active:scale-95 z-50 cursor-pointer"
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+            ) : (
+              <ChevronLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+            )}
+          </button>
+
           {isCollapsed ? (
-            <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
-          ) : (
-            <ChevronLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-          )}
-        </button>
-
-        {isCollapsed ? (
-          /* ========================================================= */
-          /* COLLAPSED MODE                                            */
-          /* ========================================================= */
-          <div className="flex flex-col items-center justify-between h-full w-full py-1 pb-2">
-            {/* Top: Brand Logo */}
-            <div className="relative w-full flex justify-center shrink-0 pt-0.5" ref={workspacePopoverRef}>
-              <div
-                onClick={() => setShowWorkspacePopover(!showWorkspacePopover)}
-                onMouseEnter={(e) => handleMouseEnter('widelab Team Plan', e)}
-                onMouseLeave={() => setActiveTooltip(null)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                <div className="w-9 h-9 rounded-xl bg-[#3F47EC] text-white flex items-center justify-center font-bold text-xs tracking-tight shadow-sm ring-2 ring-indigo-100">
-                  wl
+            /* ========================================================= */
+            /* COLLAPSED MODE                                            */
+            /* ========================================================= */
+            <div className="flex flex-col items-center justify-between h-full w-full py-1 pb-2">
+              {/* Top: Brand Logo */}
+              <div className="relative w-full flex justify-center shrink-0 pt-0.5" ref={workspacePopoverRef}>
+                <div
+                  onClick={() => setShowWorkspacePopover(!showWorkspacePopover)}
+                  onMouseEnter={(e) => handleMouseEnter('widelab Team Plan', e)}
+                  onMouseLeave={() => setActiveTooltip(null)}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-[#3F47EC] text-white flex items-center justify-center font-bold text-xs tracking-tight shadow-sm ring-2 ring-indigo-100">
+                    wl
+                  </div>
                 </div>
-              </div>
 
-              {/* Workspace Popover */}
-              {showWorkspacePopover && (
-                <div className="absolute top-0 left-[calc(100%+14px)] w-64 bg-white rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.18)] border border-slate-200/90 p-2 z-50 animate-in fade-in zoom-in-95">
-                  <div className="space-y-1">
-                    {workspaces.map((ws, i) => (
-                      <div
-                        key={i}
-                        onClick={() => setShowWorkspacePopover(false)}
-                        className={`flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-colors ${ws.active
+                {/* Workspace Popover */}
+                {showWorkspacePopover && (
+                  <div className="absolute top-0 left-[calc(100%+14px)] w-64 bg-white rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.18)] border border-slate-200/90 p-2 z-50 animate-in fade-in zoom-in-95">
+                    <div className="space-y-1">
+                      {workspaces.map((ws, i) => (
+                        <div
+                          key={i}
+                          onClick={() => setShowWorkspacePopover(false)}
+                          className={`flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-colors ${ws.active
                             ? 'bg-[#F0F2FF] text-slate-900 font-semibold'
                             : 'hover:bg-slate-50 text-slate-700'
-                          }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div
-                            className={`w-7 h-7 rounded-lg ${ws.color} flex items-center justify-center text-[10px] font-bold shrink-0 shadow-xs`}
-                          >
-                            {ws.logoText}
-                          </div>
-                          <div className="min-w-0 text-left">
-                            <div className="text-xs font-semibold text-slate-900 truncate">
-                              {ws.name}
+                            }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-7 h-7 rounded-lg ${ws.color} flex items-center justify-center text-[10px] font-bold shrink-0 shadow-xs`}
+                            >
+                              {ws.logoText}
                             </div>
-                            <div className="text-[10px] text-slate-500 truncate">
-                              {ws.subtitle}
+                            <div className="min-w-0 text-left">
+                              <div className="text-xs font-semibold text-slate-900 truncate">
+                                {ws.name}
+                              </div>
+                              <div className="text-[10px] text-slate-500 truncate">
+                                {ws.subtitle}
+                              </div>
                             </div>
                           </div>
+                          {ws.active && <Check className="w-4 h-4 text-[#3F47EC] shrink-0" />}
                         </div>
-                        {ws.active && <Check className="w-4 h-4 text-[#3F47EC] shrink-0" />}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Middle Section: Strict Equal Spacing between the 5 Icons */}
-            <div className="flex flex-col items-center gap-2.5 w-full my-auto">
-              {/* The 5 Navigation Icons (Layers, Bell, Book, Zap, File) with identical equal gap */}
-              {topFiveIcons.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href;
-                return (
-                  <div
-                    key={item.href}
-                    className="w-full flex justify-center"
-                    onMouseEnter={(e) => handleMouseEnter(item.label, e)}
-                    onMouseLeave={() => setActiveTooltip(null)}
-                  >
-                    <Link
-                      href={getScopedHref(item.href, user)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-xl text-xs transition-all relative ${isActive
-                          ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
-                    >
-                      <Icon className="w-4 h-4 text-slate-500 stroke-[1.8] shrink-0" />
-                      {(item as any).hasBadge && (
-                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#EA580C] ring-2 ring-white" />
-                      )}
-                    </Link>
-                  </div>
-                );
-              })}
-
-              {/* Projects Pastel Squares */}
-              <div className="flex flex-col items-center gap-2 pt-0.5 w-full">
-                {activeConfig.projects.map((proj) => {
-                  const isActive = pathname === proj.href;
-                  return (
-                    <div
-                      key={proj.href}
-                      className="w-full flex justify-center"
-                      onMouseEnter={(e) => handleMouseEnter(proj.label, e)}
-                      onMouseLeave={() => setActiveTooltip(null)}
-                    >
-                      <Link
-                        href={getScopedHref(proj.href, user)}
-                        className={`w-8 h-7 flex items-center justify-center rounded-xl text-xs transition-colors ${isActive
-                            ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                          }`}
-                      >
-                        <span className={`w-4 h-4 rounded-md ${proj.color} shrink-0`} />
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Bottom Stack: Settings, Help, Divider, Avatar (Comfortably Inside Card) */}
-            <div className="flex flex-col items-center gap-2.5 w-full shrink-0 pb-1">
-              {/* Settings */}
-              <div
-                className="w-full flex justify-center"
-                onMouseEnter={(e) => handleMouseEnter('Settings', e)}
-                onMouseLeave={() => setActiveTooltip(null)}
-              >
-                <Link
-                  href={getScopedHref(profileHref, user)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-                >
-                  <Settings className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
-                </Link>
-              </div>
-
-              {/* Help */}
-              <div
-                className="w-full flex justify-center"
-                onMouseEnter={(e) => handleMouseEnter('Help', e)}
-                onMouseLeave={() => setActiveTooltip(null)}
-              >
-                <Link
-                  href={getScopedHref(notifHref, user)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-                >
-                  <HelpCircle className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
-                </Link>
-              </div>
-
-              {/* Divider */}
-              <div className="w-8 h-px bg-slate-100 my-0.5 mx-auto" />
-
-              {/* User Avatar (Fully Inside White Card) */}
-              <div className="relative w-full flex justify-center pt-0.5" ref={userPopoverRef}>
-                <div
-                  onClick={() => setShowUserPopover(!showUserPopover)}
-                  onMouseEnter={(e) => handleMouseEnter(`${user?.name} (Account)`, e)}
-                  onMouseLeave={() => setActiveTooltip(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-pink-100 p-0.5 border border-pink-200 shrink-0 overflow-hidden flex items-center justify-center shadow-xs">
-                    <img
-                      src={
-                        user?.avatar ||
-                        `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`
-                      }
-                      alt="Avatar"
-                      className="w-full h-full rounded-md object-cover"
-                    />
-                  </div>
-                </div>
-
-                {/* Profile Popover */}
-                {showUserPopover && (
-                  <div className="absolute bottom-0 left-[calc(100%+14px)] w-60 bg-white rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.18)] border border-slate-200/90 p-3 z-50 animate-in fade-in zoom-in-95 space-y-2">
-                    <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
-                      <div className="w-8 h-8 rounded-lg bg-pink-100 p-0.5 border border-pink-200 shrink-0 overflow-hidden">
-                        <img
-                          src={
-                            user?.avatar ||
-                            `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`
-                          }
-                          alt="Avatar"
-                          className="w-full h-full rounded-md object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0 text-left">
-                        <div className="text-xs font-bold text-slate-900 truncate">{user?.name}</div>
-                        <div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-xs text-slate-600">
-                      <Link
-                        href={getScopedHref(profileHref, user)}
-                        onClick={() => setShowUserPopover(false)}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
-                      >
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Account Settings</span>
-                      </Link>
-
-                      <div className="px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-medium flex items-center gap-2 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                        <span>Update App</span>
-                      </div>
-
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors font-medium text-left cursor-pointer"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        <span>Logout</span>
-                      </button>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">
-                      v1.5.69 &bull; Terms &amp; Conditions
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        ) : (
-          /* ========================================================= */
-          /* EXPANDED MODE                                             */
-          /* ========================================================= */
-          <div className="flex flex-col justify-between h-full w-full">
-            <div className="space-y-3.5">
-              {/* Workspace / Brand Header */}
-              <div className="relative" ref={workspacePopoverRef}>
-                <div
-                  onClick={() => setShowWorkspacePopover(!showWorkspacePopover)}
-                  className="flex items-center justify-between px-2 py-1 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-[#3F47EC] text-white flex items-center justify-center font-bold text-xs tracking-tight shadow-sm ring-2 ring-indigo-100 shrink-0">
-                      wl
-                    </div>
-                    <div className="min-w-0 text-left">
-                      <div className="text-[13px] font-bold text-slate-900 tracking-tight leading-tight truncate">
-                        widelab
-                      </div>
-                      <div className="text-[11px] text-slate-400 font-normal leading-tight truncate">
-                        Team Plan
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400" />
-                </div>
-              </div>
 
-              {/* Primary Nav Links */}
-              <nav className="space-y-1">
-                {activeConfig.main.map((item) => {
+              {/* Middle Section: Strict Equal Spacing between the 5 Icons */}
+              <div className="flex flex-col items-center gap-2.5 w-full my-auto">
+                {/* The 5 Navigation Icons (Layers, Bell, Book, Zap, File) with identical equal gap */}
+                {topFiveIcons.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
                   return (
-                    <Link
+                    <div
                       key={item.href}
-                      href={getScopedHref(item.href, user)}
-                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition-all ${isActive
+                      className="w-full flex justify-center"
+                      onMouseEnter={(e) => handleMouseEnter(item.label, e)}
+                      onMouseLeave={() => setActiveTooltip(null)}
+                    >
+                      <Link
+                        href={getScopedHref(item.href, user)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-xl text-xs transition-all relative ${isActive
                           ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                          }`}
+                      >
                         <Icon className="w-4 h-4 text-slate-500 stroke-[1.8] shrink-0" />
-                        <span className="truncate">{item.label}</span>
-                      </div>
-                    </Link>
+                        {(item as any).hasBadge && (
+                          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#EA580C] ring-2 ring-white" />
+                        )}
+                      </Link>
+                    </div>
                   );
                 })}
-              </nav>
 
-              {/* Shared Section */}
-              <div className="pt-1">
-                <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400">
-                  Shared
+                {/* Projects Pastel Squares */}
+                <div className="flex flex-col items-center gap-2 pt-0.5 w-full">
+                  {activeConfig.projects.map((proj) => {
+                    const isActive = pathname === proj.href;
+                    return (
+                      <div
+                        key={proj.href}
+                        className="w-full flex justify-center"
+                        onMouseEnter={(e) => handleMouseEnter(proj.label, e)}
+                        onMouseLeave={() => setActiveTooltip(null)}
+                      >
+                        <Link
+                          href={getScopedHref(proj.href, user)}
+                          className={`w-8 h-7 flex items-center justify-center rounded-xl text-xs transition-colors ${isActive
+                            ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                            }`}
+                        >
+                          <span className={`w-4 h-4 rounded-md ${proj.color} shrink-0`} />
+                        </Link>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="space-y-1">
-                  {activeConfig.shared.map((item) => {
+              </div>
+
+              {/* Bottom Stack: Settings, Help, Divider, Avatar (Comfortably Inside Card) */}
+              <div className="flex flex-col items-center gap-2.5 w-full shrink-0 pb-1">
+                {/* Settings */}
+                <div
+                  className="w-full flex justify-center"
+                  onMouseEnter={(e) => handleMouseEnter('Settings', e)}
+                  onMouseLeave={() => setActiveTooltip(null)}
+                >
+                  <Link
+                    href={getScopedHref(profileHref, user)}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
+                  </Link>
+                </div>
+
+                {/* Help */}
+                <div
+                  className="w-full flex justify-center"
+                  onMouseEnter={(e) => handleMouseEnter('Help', e)}
+                  onMouseLeave={() => setActiveTooltip(null)}
+                >
+                  <Link
+                    href={getScopedHref(notifHref, user)}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                  >
+                    <HelpCircle className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
+                  </Link>
+                </div>
+
+                {/* Divider */}
+                <div className="w-8 h-px bg-slate-100 my-0.5 mx-auto" />
+
+                {/* User Avatar (Fully Inside White Card) */}
+                <div className="relative w-full flex justify-center pt-0.5" ref={userPopoverRef}>
+                  <div
+                    onClick={() => setShowUserPopover(!showUserPopover)}
+                    onMouseEnter={(e) => handleMouseEnter(`${user?.name} (Account)`, e)}
+                    onMouseLeave={() => setActiveTooltip(null)}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-pink-100 p-0.5 border border-pink-200 shrink-0 overflow-hidden flex items-center justify-center shadow-xs">
+                      <img
+                        src={
+                          user?.avatar ||
+                          `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`
+                        }
+                        alt="Avatar"
+                        className="w-full h-full rounded-md object-cover"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Profile Popover */}
+                  {showUserPopover && (
+                    <div className="absolute bottom-0 left-[calc(100%+14px)] w-60 bg-white rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.18)] border border-slate-200/90 p-3 z-50 animate-in fade-in zoom-in-95 space-y-2">
+                      <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="w-8 h-8 rounded-lg bg-pink-100 p-0.5 border border-pink-200 shrink-0 overflow-hidden">
+                          <img
+                            src={
+                              user?.avatar ||
+                              `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`
+                            }
+                            alt="Avatar"
+                            className="w-full h-full rounded-md object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 text-left">
+                          <div className="text-xs font-bold text-slate-900 truncate">{user?.name}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{user?.email}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 text-xs text-slate-600">
+                        <Link
+                          href={getScopedHref(profileHref, user)}
+                          onClick={() => setShowUserPopover(false)}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+                        >
+                          <User className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Account Settings</span>
+                        </Link>
+
+                        <div className="px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-medium flex items-center gap-2 text-xs">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                          <span>Update App</span>
+                        </div>
+
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors font-medium text-left cursor-pointer"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">
+                        v1.5.69 &bull; Terms &amp; Conditions
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ========================================================= */
+            /* EXPANDED MODE                                             */
+            /* ========================================================= */
+            <div className="flex flex-col justify-between h-full w-full">
+              <div className="space-y-3.5">
+                {/* Workspace / Brand Header */}
+                <div className="relative" ref={workspacePopoverRef}>
+                  <div
+                    onClick={() => setShowWorkspacePopover(!showWorkspacePopover)}
+                    className="flex items-center justify-between px-2 py-1 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-[#3F47EC] text-white flex items-center justify-center font-bold text-xs tracking-tight shadow-sm ring-2 ring-indigo-100 shrink-0">
+                        wl
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <div className="text-[13px] font-bold text-slate-900 tracking-tight leading-tight truncate">
+                          widelab
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-normal leading-tight truncate">
+                          Team Plan
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
+                </div>
+
+                {/* Primary Nav Links */}
+                <nav className="space-y-1">
+                  {activeConfig.main.map((item) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href;
                     return (
                       <Link
                         key={item.href}
                         href={getScopedHref(item.href, user)}
-                        className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-all ${isActive
-                            ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition-all ${isActive
+                          ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                           }`}
                       >
-                        <Icon className="w-4 h-4 text-slate-500 stroke-[1.8] shrink-0" />
-                        <span className="truncate">{item.label}</span>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Icon className="w-4 h-4 text-slate-500 stroke-[1.8] shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </div>
                       </Link>
                     );
                   })}
-                </div>
-              </div>
+                </nav>
 
-              {/* Projects Section */}
-              <div className="pt-1">
-                <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400">
-                  Projects
-                </div>
-                <div className="space-y-1">
-                  {activeConfig.projects.map((proj) => {
-                    const isActive = pathname === proj.href;
-                    return (
-                      <Link
-                        key={proj.href}
-                        href={getScopedHref(proj.href, user)}
-                        className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors ${isActive
+                {/* Shared Section */}
+                <div className="pt-1">
+                  <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400">
+                    Shared
+                  </div>
+                  <div className="space-y-1">
+                    {activeConfig.shared.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = pathname === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={getScopedHref(item.href, user)}
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-all ${isActive
                             ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                          }`}
-                      >
-                        <span className={`w-4 h-4 rounded-md ${proj.color} shrink-0`} />
-                        <span className="truncate">{proj.label}</span>
-                      </Link>
-                    );
-                  })}
+                            }`}
+                        >
+                          <Icon className="w-4 h-4 text-slate-500 stroke-[1.8] shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Projects Section */}
+                <div className="pt-1">
+                  <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400">
+                    Projects
+                  </div>
+                  <div className="space-y-1">
+                    {activeConfig.projects.map((proj) => {
+                      const isActive = pathname === proj.href;
+                      return (
+                        <Link
+                          key={proj.href}
+                          href={getScopedHref(proj.href, user)}
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition-colors ${isActive
+                            ? 'bg-[#F2F3F6] text-slate-900 font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                            }`}
+                        >
+                          <span className={`w-4 h-4 rounded-md ${proj.color} shrink-0`} />
+                          <span className="truncate">{proj.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Section */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <Link
+                  href={getScopedHref(profileHref, user)}
+                  className="flex items-center gap-2.5 px-2.5 py-1 rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                >
+                  <Settings className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
+                  <span>Settings</span>
+                </Link>
+                <Link
+                  href={getScopedHref(notifHref, user)}
+                  className="flex items-center gap-2.5 px-2.5 py-1 rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                >
+                  <HelpCircle className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
+                  <span>Help</span>
+                </Link>
+
+                <div className="w-full h-px bg-slate-100 my-1" />
+
+                <div
+                  onClick={() => setShowUserPopover(!showUserPopover)}
+                  className="flex items-center justify-between p-1.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-pink-100 p-0.5 border border-pink-200 shrink-0 overflow-hidden flex items-center justify-center">
+                      <img
+                        src={
+                          user?.avatar ||
+                          `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`
+                        }
+                        alt="Avatar"
+                        className="w-full h-full rounded-md object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0 text-left">
+                      <div className="text-xs font-semibold text-slate-900 truncate leading-tight">
+                        {user?.name || 'Sandra Marx'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate leading-tight">
+                        {user?.email || 'sandra@gmail.com'}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400" />
                 </div>
               </div>
             </div>
+          )}
+        </div>
 
-            {/* Bottom Section */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-100">
-              <Link
-                href={getScopedHref(profileHref, user)}
-                className="flex items-center gap-2.5 px-2.5 py-1 rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-              >
-                <Settings className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
-                <span>Settings</span>
-              </Link>
-              <Link
-                href={getScopedHref(notifHref, user)}
-                className="flex items-center gap-2.5 px-2.5 py-1 rounded-xl text-xs text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-              >
-                <HelpCircle className="w-4 h-4 text-slate-400 stroke-[1.8] shrink-0" />
-                <span>Help</span>
-              </Link>
-
-              <div className="w-full h-px bg-slate-100 my-1" />
-
-              <div
-                onClick={() => setShowUserPopover(!showUserPopover)}
-                className="flex items-center justify-between p-1.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-pink-100 p-0.5 border border-pink-200 shrink-0 overflow-hidden flex items-center justify-center">
-                    <img
-                      src={
-                        user?.avatar ||
-                        `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150`
-                      }
-                      alt="Avatar"
-                      className="w-full h-full rounded-md object-cover"
-                    />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <div className="text-xs font-semibold text-slate-900 truncate leading-tight">
-                      {user?.name || 'Sandra Marx'}
-                    </div>
-                    <div className="text-[10px] text-slate-400 truncate leading-tight">
-                      {user?.email || 'sandra@gmail.com'}
-                    </div>
-                  </div>
-                </div>
-                <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400" />
-              </div>
-            </div>
+        {/* Floating Dark Tooltip in Collapsed Mode */}
+        {isCollapsed && activeTooltip && (
+          <div
+            style={{ top: activeTooltip.top - 14 }}
+            className="fixed left-[84px] z-50 px-2.5 py-1 bg-black text-white text-[11px] font-medium rounded-md shadow-xl pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 flex items-center"
+          >
+            {activeTooltip.text}
           </div>
         )}
-      </div>
-
-      {/* Floating Dark Tooltip in Collapsed Mode */}
-      {isCollapsed && activeTooltip && (
-        <div
-          style={{ top: activeTooltip.top - 14 }}
-          className="fixed left-[84px] z-50 px-2.5 py-1 bg-black text-white text-[11px] font-medium rounded-md shadow-xl pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 flex items-center"
-        >
-          {activeTooltip.text}
-        </div>
-      )}
-    </aside>
+      </aside>
     </>
   );
 }
