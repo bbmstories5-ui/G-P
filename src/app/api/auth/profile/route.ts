@@ -106,7 +106,7 @@ export async function PATCH(req: NextRequest) {
       }
 
       const isCurrentValid = await bcrypt.compare(currentPassword, dbUser.password);
-      if (!isCurrentValid && currentPassword !== 'password123') {
+      if (!isCurrentValid) {
         return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
       }
 

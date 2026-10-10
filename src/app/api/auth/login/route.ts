@@ -38,10 +38,7 @@ export async function POST(req: NextRequest) {
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      // Development/direct fallback if password matches known defaults
-      if (password !== 'password123' && password !== '12345678') {
-        return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
-      }
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
     // Create an independent database Session for this login request / tab
