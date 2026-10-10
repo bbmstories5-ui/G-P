@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import nodemailer, { Transporter } from 'nodemailer';
 
 export interface SendInvitationEmailParams {
   toEmail: string;
@@ -13,8 +13,7 @@ export interface EmailDispatchResult {
   success: boolean;
   messageId?: string;
   error?: string;
-  code?: 'MISSING_API_KEY' | 'UNVERIFIED_DOMAIN_RESTRICTION' | 'INVALID_RECIPIENT' | 'PROVIDER_ERROR' | 'SUCCESS';
-  details?: any;
+  code?: 'GMAIL_SUCCESS' | 'GMAIL_WEBHOOK_SUCCESS' | 'CONFIG_ERROR' | 'CONNECTION_ERROR';
 }
 
 /**
@@ -40,9 +39,6 @@ export function resolveLiveLoginUrl(inputUrl: string): string {
   return inputUrl;
 }
 
-/**
- * Validates email format
- */
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
@@ -252,7 +248,25 @@ function generateInvitationHtml({
 }
 
 /**
- * Main transactional email dispatcher using official Resend HTTPS API (Port 443)
+ * Creates Gmail Nodemailer transporter
+ */
+function createGmailTransporter(user: string, pass: string): Transporter {
+  const cleanPass = pass.replace(/\s+/g, '');
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: user.trim(),
+      pass: cleanPass,
+    },
+    connectionTimeout: 8000,
+    greetingTimeout: 6000,
+    socketTimeout: 10000,
+  });
+}
+
+/**
+ * Google Mail Sender: dispatches via Google Apps Script HTTPS Webhook (Port 443 - 100% Cloud-Proof)
+ * or Direct Gmail SMTP
  */
 export async function sendInvitationEmail({
   toEmail,
@@ -264,30 +278,16 @@ export async function sendInvitationEmail({
 }: SendInvitationEmailParams): Promise<EmailDispatchResult> {
   const cleanEmail = toEmail.trim().toLowerCase();
 
-  // Validate recipient format
   if (!isValidEmail(cleanEmail)) {
     return {
       success: false,
       error: `Invalid recipient email address format: ${cleanEmail}`,
-      code: 'INVALID_RECIPIENT',
     };
   }
 
-  const resendApiKey = process.env.RESEND_API_KEY;
-
-  // If RESEND_API_KEY is not configured, report simulated mode safely
-  if (!resendApiKey) {
-    console.log(`[RESEND SIMULATION] RESEND_API_KEY not configured. Invitation simulated for ${cleanEmail}:`);
-    console.log(`Password: ${password} | Role: ${role} | URL: ${rawLoginUrl}`);
-    return {
-      success: true,
-      messageId: `simulated-${Date.now()}`,
-      code: 'MISSING_API_KEY',
-    };
-  }
-
-  const fromSender = process.env.EMAIL_FROM || 'Creative Portal <onboarding@resend.dev>';
-  const replyTo = process.env.EMAIL_REPLY_TO || undefined;
+  const gmailWebhookUrl = process.env.GMAIL_WEBHOOK_URL;
+  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
+  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
   const loginUrl = resolveLiveLoginUrl(rawLoginUrl);
   const subject = `Welcome to Creative Portal - Account Invitation`;
 
@@ -302,51 +302,83 @@ export async function sendInvitationEmail({
 
   const textContent = `Hello ${recipientName},\n\nYou have been invited to Creative Portal as a ${role}.\n\nYour Login Details:\nEmail: ${cleanEmail}\nPassword: ${password}\nRole: ${role} (${identifier})\n\nLog in here: ${loginUrl}\n\nBest regards,\nCreative Portal Team`;
 
-  try {
-    const resend = new Resend(resendApiKey.trim());
+  // METHOD 1: Google Apps Script HTTPS Webhook (Dispatches from bbmstories5@gmail.com directly via Google's servers over Port 443)
+  if (gmailWebhookUrl) {
+    try {
+      console.log(`[GOOGLE MAIL WEBHOOK] Dispatching to ${cleanEmail} via Google API...`);
+      const res = await fetch(gmailWebhookUrl.trim(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: cleanEmail,
+          subject,
+          html: htmlContent,
+          text: textContent,
+        }),
+      });
 
-    const { data, error } = await resend.emails.send({
-      from: fromSender,
-      to: [cleanEmail],
-      replyTo,
-      subject,
-      html: htmlContent,
-      text: textContent,
-    });
+      const data = await res.json().catch(() => ({ success: res.ok }));
+      if (res.ok && data.success !== false) {
+        console.log(`[GOOGLE MAIL WEBHOOK SUCCESS] Delivered to ${cleanEmail}`);
+        return {
+          success: true,
+          messageId: data.messageId || `gsuite-${Date.now()}`,
+          code: 'GMAIL_WEBHOOK_SUCCESS',
+        };
+      } else {
+        console.warn(`[GOOGLE MAIL WEBHOOK WARNING]`, data.error || 'Webhook failed');
+      }
+    } catch (whErr: any) {
+      console.warn(`[GOOGLE MAIL WEBHOOK ERROR]`, whErr.message);
+    }
+  }
 
-    if (error) {
-      console.warn(`[RESEND DISPATCH FAILED] Error for ${cleanEmail}:`, error.message);
+  // METHOD 2: Direct Gmail SMTP using user's App Password (bbmstories5@gmail.com)
+  if (smtpUser && smtpPass) {
+    try {
+      console.log(`[GMAIL SMTP] Dispatching directly via Google Gmail SMTP to ${cleanEmail}...`);
+      const transporter = createGmailTransporter(smtpUser, smtpPass);
 
-      // Check specifically for free sandbox testing restriction
-      const isDomainRestriction =
-        error.message.includes('only send testing emails') ||
-        error.message.includes('verify a domain') ||
-        error.message.includes('domain is not verified');
+      const info = await transporter.sendMail({
+        from: `"Creative Portal" <${smtpUser}>`,
+        replyTo: smtpUser,
+        to: cleanEmail,
+        subject,
+        text: textContent,
+        html: htmlContent,
+      });
+
+      console.log(`[GMAIL SMTP SUCCESS] Delivered to ${cleanEmail}. Message ID: ${info.messageId}`);
+      return {
+        success: true,
+        messageId: info.messageId,
+        code: 'GMAIL_SUCCESS',
+      };
+    } catch (smtpErr: any) {
+      console.error(`[GMAIL SMTP FAILED]`, smtpErr.message);
+
+      // On Railway, if TCP ports 465/587 are blocked by cloud firewall
+      const isTimeout = smtpErr.message.includes('ETIMEDOUT') || smtpErr.message.includes('timeout') || smtpErr.code === 'ETIMEDOUT';
+      if (isTimeout) {
+        return {
+          success: false,
+          error: `Railway Cloud Container blocked direct SMTP ports 465/587 to prevent spam. Set GMAIL_WEBHOOK_URL to send via Google HTTPS Port 443.`,
+          code: 'CONNECTION_ERROR',
+        };
+      }
 
       return {
         success: false,
-        error: isDomainRestriction
-          ? `Resend Free Sandbox: Can only send to account owner email or requires verified domain at resend.com/domains`
-          : error.message,
-        code: isDomainRestriction ? 'UNVERIFIED_DOMAIN_RESTRICTION' : 'PROVIDER_ERROR',
-        details: error,
+        error: smtpErr.message,
+        code: 'CONNECTION_ERROR',
       };
     }
-
-    const messageId = data?.id || `resend-${Date.now()}`;
-    console.log(`[RESEND DISPATCH SUCCESS] Delivered to ${cleanEmail} (ID: ${messageId})`);
-
-    return {
-      success: true,
-      messageId,
-      code: 'SUCCESS',
-    };
-  } catch (err: any) {
-    console.error(`[RESEND SDK EXCEPTION] Error sending to ${cleanEmail}:`, err.message);
-    return {
-      success: false,
-      error: err.message || 'Unknown network error occurred while dispatching email via Resend',
-      code: 'PROVIDER_ERROR',
-    };
   }
+
+  return {
+    success: false,
+    error: 'No Google Mail configuration found (missing SMTP_USER / SMTP_PASS / GMAIL_WEBHOOK_URL)',
+    code: 'CONFIG_ERROR',
+  };
 }
+
