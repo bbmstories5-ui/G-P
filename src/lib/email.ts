@@ -31,11 +31,7 @@ export function resolveLiveLoginUrl(inputUrl: string): string {
     return inputUrl.replace(/^http:\/\/(localhost|127\.0\.0\.1):\d+/, cleanAppUrl);
   }
 
-  // Fallback to official Railway live deployment if sent from local test
-  if (inputUrl.includes('localhost') || inputUrl.includes('127.0.0.1')) {
-    return inputUrl.replace(/^http:\/\/(localhost|127\.0\.0\.1):\d+/, 'https://portal-grap.up.railway.app');
-  }
-
+  // Keep the current working origin (e.g. http://localhost:3000 or production host)
   return inputUrl;
 }
 
@@ -381,4 +377,270 @@ export async function sendInvitationEmail({
     code: 'CONFIG_ERROR',
   };
 }
+
+export interface SendPasswordResetEmailParams {
+  toEmail: string;
+  recipientName: string;
+  resetUrl: string;
+}
+
+/**
+ * Generates modern White Minimalist Password Reset HTML
+ */
+function generatePasswordResetHtml({
+  recipientName,
+  toEmail,
+  resetUrl,
+}: {
+  recipientName: string;
+  toEmail: string;
+  resetUrl: string;
+}): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Reset Your Password</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          background-color: #f8fafc;
+          margin: 0;
+          padding: 32px 16px;
+          color: #0f172a;
+          -webkit-font-smoothing: antialiased;
+        }
+        .wrapper {
+          max-width: 540px;
+          margin: 0 auto;
+          background-color: #ffffff;
+          border-radius: 24px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+          overflow: hidden;
+        }
+        .shimmer-bar {
+          height: 6px;
+          background: linear-gradient(90deg, #f59e0b, #ef4444, #6366f1);
+          width: 100%;
+        }
+        .header {
+          padding: 36px 40px 24px;
+          text-align: left;
+        }
+        .brand-badge {
+          display: inline-block;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #d97706;
+          background-color: #fef3c7;
+          padding: 4px 12px;
+          border-radius: 9999px;
+          margin-bottom: 16px;
+        }
+        .title {
+          font-size: 22px;
+          font-weight: 800;
+          color: #0f172a;
+          margin: 0 0 8px;
+          letter-spacing: -0.02em;
+        }
+        .subtitle {
+          font-size: 14px;
+          color: #64748b;
+          line-height: 1.5;
+          margin: 0;
+        }
+        .content {
+          padding: 0 40px 36px;
+        }
+        .text-lead {
+          font-size: 14px;
+          line-height: 1.6;
+          color: #334155;
+          margin-bottom: 24px;
+        }
+        .cta-container {
+          text-align: center;
+          margin: 28px 0;
+        }
+        .btn {
+          display: inline-block;
+          background-color: #0f172a;
+          color: #ffffff !important;
+          font-size: 14px;
+          font-weight: 700;
+          text-decoration: none;
+          padding: 14px 36px;
+          border-radius: 9999px;
+          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+          transition: transform 0.2s;
+        }
+        .security-box {
+          background-color: #f8fafc;
+          border: 1px dashed #cbd5e1;
+          border-radius: 16px;
+          padding: 16px 20px;
+          font-size: 12px;
+          color: #64748b;
+          line-height: 1.6;
+          margin-top: 24px;
+        }
+        .url-box {
+          word-break: break-all;
+          color: #6366f1;
+          font-size: 11px;
+          margin-top: 8px;
+        }
+        .footer {
+          background-color: #f8fafc;
+          border-top: 1px solid #f1f5f9;
+          padding: 24px 40px;
+          font-size: 12px;
+          color: #94a3b8;
+          text-align: center;
+          line-height: 1.5;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="shimmer-bar"></div>
+        <div class="header">
+          <span class="brand-badge">Account Security</span>
+          <h1 class="title">Reset Your Password</h1>
+          <p class="subtitle">Creative Flow Enterprise Portal</p>
+        </div>
+        <div class="content">
+          <p class="text-lead">
+            Hello <strong>${recipientName}</strong>,<br><br>
+            We received a request to reset the password for your Creative Portal account associated with <strong>${toEmail}</strong>.<br><br>
+            Click the secure button below to choose a new password:
+          </p>
+
+          <div class="cta-container">
+            <a href="${resetUrl}" class="btn" target="_blank">Reset Password &rarr;</a>
+          </div>
+
+          <div class="security-box">
+            <strong>Security Notice:</strong>
+            <br>• This password reset link will expire in <strong>1 hour</strong>.
+            <br>• If you did not make this request, you can safely ignore this email. Your existing credentials remain completely secure.
+            <div class="url-box">
+              Direct Link: <a href="${resetUrl}" style="color: #6366f1;">${resetUrl}</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} Creative Flow Enterprise. All rights reserved.<br>
+          This is an automated security transmission. Please do not reply directly.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Dispatches password reset recovery email via Google Mail / Webhook
+ */
+export async function sendPasswordResetEmail({
+  toEmail,
+  recipientName,
+  resetUrl: rawResetUrl,
+}: SendPasswordResetEmailParams): Promise<EmailDispatchResult> {
+  const cleanEmail = toEmail.trim().toLowerCase();
+
+  if (!isValidEmail(cleanEmail)) {
+    return {
+      success: false,
+      error: `Invalid recipient email address format: ${cleanEmail}`,
+    };
+  }
+
+  const gmailWebhookUrl = process.env.GMAIL_WEBHOOK_URL;
+  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
+  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
+  const resetUrl = resolveLiveLoginUrl(rawResetUrl);
+  const subject = `Reset Your Creative Portal Password`;
+
+  const htmlContent = generatePasswordResetHtml({
+    recipientName,
+    toEmail: cleanEmail,
+    resetUrl,
+  });
+
+  const textContent = `Hello ${recipientName},\n\nWe received a request to reset your password for Creative Portal.\n\nPlease visit this link to set your new password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, you can safely ignore this email.\n\nBest regards,\nCreative Flow Enterprise`;
+
+  // METHOD 1: Google Apps Script HTTPS Webhook (Port 443)
+  if (gmailWebhookUrl) {
+    try {
+      console.log(`[GOOGLE MAIL WEBHOOK] Dispatching reset email to ${cleanEmail}...`);
+      const res = await fetch(gmailWebhookUrl.trim(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: cleanEmail,
+          subject,
+          html: htmlContent,
+          text: textContent,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({ success: res.ok }));
+      if (res.ok && data.success !== false) {
+        console.log(`[GOOGLE MAIL WEBHOOK SUCCESS] Reset email delivered to ${cleanEmail}`);
+        return {
+          success: true,
+          messageId: data.messageId || `gsuite-reset-${Date.now()}`,
+          code: 'GMAIL_WEBHOOK_SUCCESS',
+        };
+      }
+    } catch (whErr: any) {
+      console.warn(`[GOOGLE MAIL WEBHOOK ERROR]`, whErr.message);
+    }
+  }
+
+  // METHOD 2: Direct Gmail SMTP
+  if (smtpUser && smtpPass) {
+    try {
+      console.log(`[GMAIL SMTP] Dispatching reset email via Google SMTP to ${cleanEmail}...`);
+      const transporter = createGmailTransporter(smtpUser, smtpPass);
+
+      const info = await transporter.sendMail({
+        from: `"Creative Portal Security" <${smtpUser}>`,
+        replyTo: smtpUser,
+        to: cleanEmail,
+        subject,
+        text: textContent,
+        html: htmlContent,
+      });
+
+      console.log(`[GMAIL SMTP SUCCESS] Reset email delivered to ${cleanEmail}. Message ID: ${info.messageId}`);
+      return {
+        success: true,
+        messageId: info.messageId,
+        code: 'GMAIL_SUCCESS',
+      };
+    } catch (smtpErr: any) {
+      console.error(`[GMAIL SMTP FAILED]`, smtpErr.message);
+      return {
+        success: false,
+        error: smtpErr.message,
+        code: 'CONNECTION_ERROR',
+      };
+    }
+  }
+
+  return {
+    success: false,
+    error: 'No Google Mail configuration found (missing SMTP_USER / SMTP_PASS)',
+    code: 'CONFIG_ERROR',
+  };
+}
+
 

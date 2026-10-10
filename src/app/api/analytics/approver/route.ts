@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { subDays, subMonths, format, differenceInMinutes, addDays, isWithinInterval, startOfDay, endOfDay, endOfWeek } from 'date-fns';
+import { buildTimelineBuckets, findMatchingBucketIndex } from '@/lib/analytics-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,51 +65,34 @@ export async function GET(request: NextRequest) {
     ];
 
     // Build timeline buckets
-    const isDayView = range === '7d' || range === '30d';
-    const trendMap = new Map<string, { label: string; received: number; approved: number; revision: number }>();
-
-    if (isDayView) {
-      const days = range === '7d' ? 7 : 30;
-      for (let i = days - 1; i >= 0; i -= (range === '7d' ? 1 : 3)) {
-        const d = subDays(now, i);
-        const key = format(d, 'MMM dd');
-        trendMap.set(key, { label: key, received: 0, approved: 0, revision: 0 });
-      }
-    } else {
-      const months = range === '3m' ? 3 : range === '6m' ? 6 : 12;
-      for (let i = months - 1; i >= 0; i--) {
-        const d = subMonths(now, i);
-        const key = format(d, 'MMM yyyy');
-        trendMap.set(key, { label: format(d, 'MMM'), received: 0, approved: 0, revision: 0 });
-      }
-    }
+    const buckets = buildTimelineBuckets(range, now);
+    const approvalTrends = buckets.map((b) => ({
+      label: b.label,
+      received: 0,
+      approved: 0,
+      revision: 0,
+    }));
 
     for (const req of allRequirements) {
       for (const g of req.graphics) {
         for (const v of g.versions) {
           const vDate = new Date(v.createdAt);
-          if (vDate >= startDate) {
-            const key = isDayView ? format(vDate, 'MMM dd') : format(vDate, 'MMM yyyy');
-            const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-            if (match) match.received += 1;
+          const vIdx = findMatchingBucketIndex(vDate, buckets);
+          if (vIdx >= 0) {
+            approvalTrends[vIdx].received += 1;
           }
         }
       }
 
       for (const a of req.approvals) {
         const aDate = new Date(a.reviewedAt);
-        if (aDate >= startDate) {
-          const key = isDayView ? format(aDate, 'MMM dd') : format(aDate, 'MMM yyyy');
-          const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-          if (match) {
-            if (a.decision === 'APPROVED') match.approved += 1;
-            else if (a.decision === 'REVISION_REQUESTED') match.revision += 1;
-          }
+        const aIdx = findMatchingBucketIndex(aDate, buckets);
+        if (aIdx >= 0) {
+          if (a.decision === 'APPROVED') approvalTrends[aIdx].approved += 1;
+          else if (a.decision === 'REVISION_REQUESTED') approvalTrends[aIdx].revision += 1;
         }
       }
     }
-
-    const approvalTrends = Array.from(trendMap.values());
 
     // Live Approval Queue
     const approvalQueue = allRequirements

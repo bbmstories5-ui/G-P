@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
-import { subDays, subMonths, format } from 'date-fns';
+import { subDays, subMonths } from 'date-fns';
+import { buildTimelineBuckets, findMatchingBucketIndex } from '@/lib/analytics-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -78,41 +79,28 @@ export async function GET(request: NextRequest) {
     ];
 
     // Build timeline buckets
-    const isDayView = range === '7d' || range === '30d';
-    const trendMap = new Map<string, { label: string; received: number; submitted: number; approved: number }>();
-
-    if (isDayView) {
-      const days = range === '7d' ? 7 : 30;
-      for (let i = days - 1; i >= 0; i -= (range === '7d' ? 1 : 3)) {
-        const d = subDays(now, i);
-        const key = format(d, 'MMM dd');
-        trendMap.set(key, { label: key, received: 0, submitted: 0, approved: 0 });
-      }
-    } else {
-      const months = range === '3m' ? 3 : range === '6m' ? 6 : 12;
-      for (let i = months - 1; i >= 0; i--) {
-        const d = subMonths(now, i);
-        const key = format(d, 'MMM yyyy');
-        trendMap.set(key, { label: format(d, 'MMM'), received: 0, submitted: 0, approved: 0 });
-      }
-    }
+    const buckets = buildTimelineBuckets(range, now);
+    const performanceTrends = buckets.map((b) => ({
+      label: b.label,
+      received: 0,
+      submitted: 0,
+      approved: 0,
+    }));
 
     for (const req of assignedRequests) {
       const createdDate = new Date(req.createdAt);
-      if (createdDate >= startDate) {
-        const key = isDayView ? format(createdDate, 'MMM dd') : format(createdDate, 'MMM yyyy');
-        const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-        if (match) match.received += 1;
+      const rIdx = findMatchingBucketIndex(createdDate, buckets);
+      if (rIdx >= 0) {
+        performanceTrends[rIdx].received += 1;
       }
 
       // Check graphic version submissions
       for (const g of req.graphics) {
         for (const v of g.versions) {
           const vDate = new Date(v.createdAt);
-          if (vDate >= startDate) {
-            const key = isDayView ? format(vDate, 'MMM dd') : format(vDate, 'MMM yyyy');
-            const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-            if (match) match.submitted += 1;
+          const vIdx = findMatchingBucketIndex(vDate, buckets);
+          if (vIdx >= 0) {
+            performanceTrends[vIdx].submitted += 1;
           }
         }
       }
@@ -120,15 +108,12 @@ export async function GET(request: NextRequest) {
       // Check approvals
       if (['FINAL_APPROVED', 'COMPLETED'].includes(req.status)) {
         const aDate = new Date(req.updatedAt);
-        if (aDate >= startDate) {
-          const key = isDayView ? format(aDate, 'MMM dd') : format(aDate, 'MMM yyyy');
-          const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-          if (match) match.approved += 1;
+        const aIdx = findMatchingBucketIndex(aDate, buckets);
+        if (aIdx >= 0) {
+          performanceTrends[aIdx].approved += 1;
         }
       }
     }
-
-    const performanceTrends = Array.from(trendMap.values());
 
     // Recent work list
     const recentWork = assignedRequests.slice(0, 8).map((r) => {

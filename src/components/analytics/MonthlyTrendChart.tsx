@@ -34,7 +34,7 @@ export default function MonthlyTrendChart({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // Compute maximum value for scale
-  let maxValue = 1;
+  let maxValue = 0;
   for (const item of data) {
     for (const s of series) {
       const val = (item[s.key] as number) || 0;
@@ -42,8 +42,8 @@ export default function MonthlyTrendChart({
     }
   }
 
-  // Add 20% headroom
-  const chartMax = Math.ceil(maxValue * 1.2) || 5;
+  // Minimum scale of 4 for clean integer ticks [4, 3, 2, 1, 0]
+  const chartMax = maxValue > 0 ? Math.max(Math.ceil(maxValue * 1.25), 4) : 4;
 
   const ranges = [
     { label: '7D', value: '7d' },
@@ -70,10 +70,11 @@ export default function MonthlyTrendChart({
             <button
               key={r.value}
               onClick={() => onRangeChange(r.value)}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${range === r.value
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                range === r.value
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-500 hover:text-slate-800'
-                }`}
+              }`}
             >
               {r.label}
             </button>
@@ -82,7 +83,7 @@ export default function MonthlyTrendChart({
       </div>
 
       {/* Interactive Chart Container */}
-      <div className="relative flex-1 min-h-[220px] flex flex-col justify-end">
+      <div className="relative flex-1 min-h-[220px] flex flex-col justify-end pt-2">
         {/* Y-Axis Grid Lines */}
         <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-40">
           {[1, 0.75, 0.5, 0.25, 0].map((step, idx) => (
@@ -95,7 +96,7 @@ export default function MonthlyTrendChart({
         </div>
 
         {/* Bars Container */}
-        <div className="relative z-10 grid grid-flow-col auto-cols-fr gap-2 h-44 items-end pl-8 pr-2 pt-4">
+        <div className="relative z-10 grid grid-flow-col auto-cols-fr gap-1 sm:gap-2 h-44 items-end pl-8 pr-2 pt-4">
           {data.map((item, idx) => {
             const isHovered = hoveredIndex === idx;
 
@@ -106,37 +107,53 @@ export default function MonthlyTrendChart({
                 onMouseLeave={() => setHoveredIndex(null)}
                 className="flex flex-col items-center justify-end h-full group relative cursor-pointer"
               >
+                {/* Column Hover Backdrop */}
+                <div
+                  className={`absolute inset-x-0 bottom-6 top-0 rounded-xl transition-all duration-200 pointer-events-none ${
+                    isHovered ? 'bg-slate-100/80 shadow-xs' : 'bg-transparent'
+                  }`}
+                />
+
                 {/* Floating Tooltip */}
                 {isHovered && (
-                  <div className="absolute -top-12 z-30 bg-slate-900 text-white text-[10px] font-semibold py-1.5 px-2.5 rounded-lg shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95">
-                    <div className="font-bold text-slate-200 mb-0.5 border-b border-slate-700 pb-0.5">
-                      {item.label}
+                  <div className="absolute -top-16 z-30 bg-slate-900/95 backdrop-blur-sm text-white text-[10px] font-semibold py-2 px-3 rounded-xl shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 border border-slate-700/60">
+                    <div className="font-bold text-slate-200 mb-1 border-b border-slate-700/80 pb-1 flex items-center justify-between gap-3">
+                      <span>{item.label}</span>
+                      <span className="text-[9px] font-normal text-slate-400">
+                        Total: {series.reduce((sum, s) => sum + ((item[s.key] as number) || 0), 0)}
+                      </span>
                     </div>
-                    {series.map((s) => (
-                      <div key={s.key} className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                        <span className="text-slate-300">{s.label}:</span>
-                        <span className="font-bold text-white">{(item[s.key] as number) || 0}</span>
-                      </div>
-                    ))}
+                    <div className="space-y-1">
+                      {series.map((s) => (
+                        <div key={s.key} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                            <span className="text-slate-300 font-medium">{s.label}:</span>
+                          </div>
+                          <span className="font-bold text-white font-mono">{(item[s.key] as number) || 0}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 {/* Grouped Bars */}
-                <div className="flex items-end gap-1 w-full justify-center">
+                <div className="w-full flex-1 min-h-[140px] flex items-end justify-center gap-1 sm:gap-1.5 pb-1 relative z-10">
                   {series.map((s) => {
                     const value = (item[s.key] as number) || 0;
                     const heightPercent = chartMax > 0 ? (value / chartMax) * 100 : 0;
+                    const hasValue = value > 0;
 
                     return (
                       <div
                         key={s.key}
                         style={{
-                          height: `${Math.max(heightPercent, 4)}%`,
+                          height: hasValue ? `${Math.max(heightPercent, 8)}%` : '3px',
                           backgroundColor: s.color,
                         }}
-                        className={`w-full max-w-[12px] rounded-t-md transition-all duration-300 ${isHovered ? 'brightness-110 scale-y-105' : 'opacity-90'
-                          }`}
+                        className={`w-2 sm:w-3 max-w-[14px] rounded-t-sm sm:rounded-t-md transition-all duration-300 ${
+                          isHovered ? 'brightness-110 scale-y-105' : 'opacity-90'
+                        } ${!hasValue ? 'opacity-20' : 'shadow-xs'}`}
                       />
                     );
                   })}
@@ -144,8 +161,9 @@ export default function MonthlyTrendChart({
 
                 {/* X-Axis Label */}
                 <span
-                  className={`text-[10px] mt-2 truncate max-w-full font-medium ${isHovered ? 'text-slate-900 font-bold' : 'text-slate-400'
-                    }`}
+                  className={`text-[10px] mt-2 truncate max-w-full font-medium transition-colors relative z-10 ${
+                    isHovered ? 'text-slate-900 font-bold' : 'text-slate-400'
+                  }`}
                 >
                   {item.label}
                 </span>

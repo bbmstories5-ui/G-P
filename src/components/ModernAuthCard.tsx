@@ -83,17 +83,30 @@ export default function ModernAuthCard({
     }
   };
 
-  const handleForgotPassword = (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!email.trim()) {
-      setError('Please enter your account email');
+      setError('Please enter your account email address');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to dispatch recovery link');
+      }
       setForgotSuccess(true);
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to dispatch recovery link');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Video source: switches when in forgot password mode
@@ -147,23 +160,25 @@ export default function ModernAuthCard({
               {mode === 'forgot' ? (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   {forgotSuccess ? (
-                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-2">
-                      <div className="font-bold flex items-center gap-1.5 text-emerald-800">
-                        <Check className="w-4 h-4" /> Reset link dispatched!
+                    <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-3xl text-xs text-emerald-950 space-y-3 animate-in fade-in">
+                      <div className="font-bold flex items-center gap-2 text-emerald-800 text-sm">
+                        <Check className="w-4 h-4 text-emerald-600 stroke-[3]" /> Recovery link dispatched!
                       </div>
-                      <p>
-                        A recovery link has been dispatched to <strong>{email}</strong>. (Default credentials for testing: <code>password123</code>).
+                      <p className="leading-relaxed text-slate-700">
+                        A secure password reset link has been dispatched to <strong>{email}</strong>. Please check your inbox and click the link to set your new password (active for 1 hour).
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMode('signin');
-                          setForgotSuccess(false);
-                        }}
-                        className="mt-2 text-xs font-bold text-emerald-700 underline cursor-pointer"
-                      >
-                        Return to Sign in &rarr;
-                      </button>
+                      <div className="pt-2 border-t border-emerald-200/60">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode('signin');
+                            setForgotSuccess(false);
+                          }}
+                          className="text-xs font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                        >
+                          Return to Sign in &rarr;
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>

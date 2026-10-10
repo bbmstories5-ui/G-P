@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { subDays, subMonths, startOfDay, format, isAfter, isBefore, addDays } from 'date-fns';
+import { buildTimelineBuckets, findMatchingBucketIndex } from '@/lib/analytics-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,69 +67,33 @@ export async function GET(request: NextRequest) {
     ];
 
     // Build timeline buckets for Monthly / Periodic trend graph
-    const filteredRequests = allRequests.filter((r) => new Date(r.createdAt) >= startDate);
-    
-    // Group by month or day depending on range
-    const trendMap = new Map<string, { label: string; created: number; completed: number; approved: number }>();
-
-    // Prepare time slots
-    const isDayView = range === '7d' || range === '30d';
-    const stepCount = range === '7d' ? 7 : range === '30d' ? 10 : range === '3m' ? 3 : range === '6m' ? 6 : 12;
-
-    if (isDayView) {
-      const days = range === '7d' ? 7 : 30;
-      for (let i = days - 1; i >= 0; i -= (range === '7d' ? 1 : 3)) {
-        const d = subDays(now, i);
-        const key = format(d, 'MMM dd');
-        trendMap.set(key, { label: key, created: 0, completed: 0, approved: 0 });
-      }
-    } else {
-      const months = range === '3m' ? 3 : range === '6m' ? 6 : 12;
-      for (let i = months - 1; i >= 0; i--) {
-        const d = subMonths(now, i);
-        const key = format(d, 'MMM yyyy');
-        trendMap.set(key, { label: format(d, 'MMM'), created: 0, completed: 0, approved: 0 });
-      }
-    }
+    const buckets = buildTimelineBuckets(range, now);
+    const monthlyTrends = buckets.map((b) => ({
+      label: b.label,
+      created: 0,
+      completed: 0,
+      approved: 0,
+    }));
 
     // Populate trend data
     for (const req of allRequests) {
       const createdDate = new Date(req.createdAt);
-      if (createdDate >= startDate) {
-        const key = isDayView ? format(createdDate, 'MMM dd') : format(createdDate, 'MMM yyyy');
-        // Find closest bucket if stepped
-        if (trendMap.has(key)) {
-          const entry = trendMap.get(key)!;
-          entry.created += 1;
-        } else {
-          // If in between steps, add to first preceding key or match
-          const matchingKey = Array.from(trendMap.keys()).reverse().find((k) => k <= key) || Array.from(trendMap.keys())[0];
-          if (matchingKey && trendMap.has(matchingKey)) {
-            trendMap.get(matchingKey)!.created += 1;
-          }
-        }
+      const cIdx = findMatchingBucketIndex(createdDate, buckets);
+      if (cIdx >= 0) {
+        monthlyTrends[cIdx].created += 1;
       }
 
       if (['COMPLETED', 'FINAL_APPROVED'].includes(req.status)) {
         const completedDate = new Date(req.updatedAt);
-        if (completedDate >= startDate) {
-          const key = isDayView ? format(completedDate, 'MMM dd') : format(completedDate, 'MMM yyyy');
-          if (trendMap.has(key)) {
-            const entry = trendMap.get(key)!;
-            entry.completed += 1;
-            if (req.status === 'FINAL_APPROVED') entry.approved += 1;
-          } else {
-            const matchingKey = Array.from(trendMap.keys()).reverse().find((k) => k <= key) || Array.from(trendMap.keys())[0];
-            if (matchingKey && trendMap.has(matchingKey)) {
-              trendMap.get(matchingKey)!.completed += 1;
-              if (req.status === 'FINAL_APPROVED') trendMap.get(matchingKey)!.approved += 1;
-            }
+        const compIdx = findMatchingBucketIndex(completedDate, buckets);
+        if (compIdx >= 0) {
+          monthlyTrends[compIdx].completed += 1;
+          if (req.status === 'FINAL_APPROVED') {
+            monthlyTrends[compIdx].approved += 1;
           }
         }
       }
     }
-
-    const monthlyTrends = Array.from(trendMap.values());
 
     // Recent requests table data (top 8)
     const recentRequests = allRequests.slice(0, 8).map((r) => ({

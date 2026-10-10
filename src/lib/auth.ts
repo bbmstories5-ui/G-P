@@ -396,3 +396,30 @@ export async function assertRequirementAccess(requirementId: string, user: any) 
 
   throw new Error('FORBIDDEN');
 }
+
+/**
+ * Signs a secure, time-limited JWT for password reset (valid for 1 hour)
+ */
+export function signPasswordResetToken(userId: string, email: string): string {
+  return jwt.sign(
+    { userId, email: email.toLowerCase().trim(), type: 'PASSWORD_RESET' },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+}
+
+/**
+ * Verifies a password reset JWT token and returns user credentials if valid
+ */
+export function verifyPasswordResetToken(token: string): { userId: string; email: string } | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    if (decoded && decoded.type === 'PASSWORD_RESET' && decoded.userId && decoded.email) {
+      return { userId: decoded.userId, email: decoded.email };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+

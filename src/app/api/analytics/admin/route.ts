@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
-import { subDays, subMonths, format } from 'date-fns';
+import { subDays, subMonths } from 'date-fns';
+import { buildTimelineBuckets, findMatchingBucketIndex } from '@/lib/analytics-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -121,48 +122,33 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Company-wide Monthly Trends
-    const isDayView = range === '7d' || range === '30d';
-    const trendMap = new Map<string, { label: string; created: number; completed: number; approved: number }>();
-
-    if (isDayView) {
-      const days = range === '7d' ? 7 : 30;
-      for (let i = days - 1; i >= 0; i -= (range === '7d' ? 1 : 3)) {
-        const d = subDays(now, i);
-        const key = format(d, 'MMM dd');
-        trendMap.set(key, { label: key, created: 0, completed: 0, approved: 0 });
-      }
-    } else {
-      const months = range === '3m' ? 3 : range === '6m' ? 6 : 12;
-      for (let i = months - 1; i >= 0; i--) {
-        const d = subMonths(now, i);
-        const key = format(d, 'MMM yyyy');
-        trendMap.set(key, { label: format(d, 'MMM'), created: 0, completed: 0, approved: 0 });
-      }
-    }
+    // Company-wide Trends
+    const buckets = buildTimelineBuckets(range, now);
+    const companyTrends = buckets.map((b) => ({
+      label: b.label,
+      created: 0,
+      completed: 0,
+      approved: 0,
+    }));
 
     for (const req of allRequirements) {
       const createdDate = new Date(req.createdAt);
-      if (createdDate >= startDate) {
-        const key = isDayView ? format(createdDate, 'MMM dd') : format(createdDate, 'MMM yyyy');
-        const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-        if (match) match.created += 1;
+      const cIdx = findMatchingBucketIndex(createdDate, buckets);
+      if (cIdx >= 0) {
+        companyTrends[cIdx].created += 1;
       }
 
       if (['COMPLETED', 'FINAL_APPROVED'].includes(req.status)) {
         const cDate = new Date(req.updatedAt);
-        if (cDate >= startDate) {
-          const key = isDayView ? format(cDate, 'MMM dd') : format(cDate, 'MMM yyyy');
-          const match = trendMap.get(key) || Array.from(trendMap.values())[0];
-          if (match) {
-            match.completed += 1;
-            if (req.status === 'FINAL_APPROVED') match.approved += 1;
+        const compIdx = findMatchingBucketIndex(cDate, buckets);
+        if (compIdx >= 0) {
+          companyTrends[compIdx].completed += 1;
+          if (req.status === 'FINAL_APPROVED') {
+            companyTrends[compIdx].approved += 1;
           }
         }
       }
     }
-
-    const companyTrends = Array.from(trendMap.values());
 
     return NextResponse.json({
       metrics: {
