@@ -84,6 +84,13 @@ export async function PATCH(req: NextRequest) {
       department,
       specialty,
       title,
+      company,
+      businessCategory,
+      website,
+      referralGroupName,
+      birthDay,
+      birthMonth,
+      specificAsk,
       currentPassword,
       newPassword,
     } = body;
@@ -142,12 +149,26 @@ export async function PATCH(req: NextRequest) {
         update: {
           department: department || undefined,
           phone: phone !== undefined ? phone : undefined,
+          company: company !== undefined ? company : undefined,
+          businessCategory: businessCategory !== undefined ? businessCategory : undefined,
+          website: website !== undefined ? website : undefined,
+          referralGroupName: referralGroupName !== undefined ? referralGroupName : undefined,
+          birthDay: birthDay !== undefined ? birthDay : undefined,
+          birthMonth: birthMonth !== undefined ? birthMonth : undefined,
+          specificAsk: specificAsk !== undefined ? specificAsk : undefined,
         },
         create: {
           userId: user.id,
           memberCode: user.requesterProfile?.memberCode || 'Member',
           department: department || 'Marketing Operations',
           phone: phone || null,
+          company: company || null,
+          businessCategory: businessCategory || null,
+          website: website || null,
+          referralGroupName: referralGroupName || 'Apex Referral Chapter',
+          birthDay: birthDay || null,
+          birthMonth: birthMonth || null,
+          specificAsk: specificAsk || null,
         },
       });
     } else if (user.role === 'DESIGNER') {
@@ -210,6 +231,15 @@ export async function DELETE(req: NextRequest) {
     }
 
     if (sessionId) {
+      // IDOR / BOLA Prevention: Verify ownership before revoking
+      const sessionToRevoke = await prisma.session.findFirst({
+        where: { id: sessionId, userId: user.id },
+      });
+
+      if (!sessionToRevoke) {
+        return NextResponse.json({ error: 'Session not found or not owned by user' }, { status: 404 });
+      }
+
       await prisma.session.update({
         where: { id: sessionId },
         data: {

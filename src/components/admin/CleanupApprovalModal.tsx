@@ -13,8 +13,9 @@ import {
   Layers,
   X,
   Loader2,
-  ExternalLink,
   Info,
+  Clock,
+  User,
 } from 'lucide-react';
 import { tabFetch } from '@/lib/tabAuth';
 
@@ -25,11 +26,18 @@ interface CleanupItem {
   fileUrl: string;
   previewUrl?: string | null;
   fileSize: number;
+  formattedSize?: string;
   mimeType?: string;
   requirementId: string;
   reqCode: string;
   requirementTitle: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerRole?: string;
   createdAt: string;
+  expirationDate?: string;
+  ageDays?: number;
+  isExpired?: boolean;
 }
 
 interface CleanupRequestData {
@@ -92,11 +100,6 @@ export default function CleanupApprovalModal({
   };
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) {
-      setError('Please provide a reason for rejecting the cleanup request.');
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
@@ -127,9 +130,9 @@ export default function CleanupApprovalModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-purple-900/50 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl shadow-purple-950/50 text-white overflow-hidden">
+      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl text-white overflow-hidden">
         {/* Header */}
-        <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-red-950/40 via-purple-950/30 to-slate-900 flex items-start justify-between gap-4">
+        <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-red-950/50 via-slate-900 to-slate-900 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400">
               <ShieldAlert className="w-6 h-6 animate-pulse" />
@@ -170,7 +173,7 @@ export default function CleanupApprovalModal({
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3.5 flex items-center gap-3">
-              <div className="p-2.5 bg-purple-500/20 text-purple-400 rounded-lg">
+              <div className="p-2.5 bg-blue-500/20 text-blue-400 rounded-lg">
                 <FileImage className="w-5 h-5" />
               </div>
               <div>
@@ -180,12 +183,12 @@ export default function CleanupApprovalModal({
             </div>
 
             <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3.5 flex items-center gap-3">
-              <div className="p-2.5 bg-blue-500/20 text-blue-400 rounded-lg">
+              <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
                 <Database className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-slate-400 font-medium">Total Storage Size</p>
-                <p className="text-lg font-bold text-white">{request.formattedSize}</p>
+                <p className="text-xs text-slate-400 font-medium">Estimated Released Storage</p>
+                <p className="text-lg font-bold text-emerald-300">{request.formattedSize}</p>
               </div>
             </div>
 
@@ -210,11 +213,11 @@ export default function CleanupApprovalModal({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-purple-400" />
-                Scheduled Graphics Queue ({items.length})
+                <Layers className="w-4 h-4 text-blue-400" />
+                Expired Graphics Queue ({items.length})
               </h3>
               <span className="text-xs text-slate-400">
-                Only items in this request will be deleted
+                Preview before permanent deletion
               </span>
             </div>
 
@@ -223,17 +226,18 @@ export default function CleanupApprovalModal({
                 No active graphic files found in queue. All assets are currently preserved.
               </div>
             ) : (
-              <div className="border border-slate-800 rounded-xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-800/60 bg-slate-950/40">
+              <div className="border border-slate-800 rounded-xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-slate-800/60 bg-slate-950/40">
                 {items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="p-3 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition-colors"
+                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
-                        {item.previewUrl && !item.previewUrl.startsWith('data:') ? (
+                      {/* Graphic Thumbnail */}
+                      <div className="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center relative">
+                        {item.previewUrl || item.fileUrl ? (
                           <img
-                            src={item.previewUrl}
+                            src={item.previewUrl || item.fileUrl}
                             alt={item.fileName}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -244,19 +248,36 @@ export default function CleanupApprovalModal({
                           <FileImage className="w-5 h-5 text-slate-500" />
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-white truncate max-w-xs sm:max-w-md">
+
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-xs font-bold text-white truncate max-w-xs sm:max-w-md">
                           {item.fileName}
                         </p>
-                        <p className="text-[11px] text-slate-400 truncate">
-                          {item.reqCode} • {item.requirementTitle}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                          <span>{item.reqCode}</span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-500" />
+                            {item.ownerName || item.ownerEmail || 'Designer'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                          <span>Uploaded: {new Date(item.createdAt).toLocaleDateString()}</span>
+                          {item.expirationDate && (
+                            <>
+                              <span>•</span>
+                              <span className="text-amber-400 font-semibold">
+                                Expired: {new Date(item.expirationDate).toLocaleDateString()}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-xs font-mono font-medium text-slate-300">
-                        {(item.fileSize / (1024 * 1024)).toFixed(2)} MB
+                      <span className="text-xs font-mono font-bold text-slate-300">
+                        {item.formattedSize || `${(item.fileSize / 1024).toFixed(0)} KB`}
                       </span>
                     </div>
                   </div>
@@ -269,13 +290,13 @@ export default function CleanupApprovalModal({
           <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-start gap-2.5">
             <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
             <div>
-              <p className="font-semibold text-blue-200">Security &amp; Safety Protocol:</p>
+              <p className="font-semibold text-blue-200">Storage Cleanup Safety Safeguards:</p>
               <p className="text-blue-300/90 mt-0.5">
-                • Files will be backed up to the quarantine archive before deletion.
+                • Files will be checked for shared references before physical removal to prevent broken assets.
                 <br />
-                • Active website assets, user avatars, and system branding are excluded.
+                • Associated database deliverables and requirement references are safely unlinked.
                 <br />
-                • If rejected, all files remain completely untouched and safe.
+                • If rejected, all files and records remain completely untouched and active.
               </p>
             </div>
           </div>
@@ -285,12 +306,12 @@ export default function CleanupApprovalModal({
             <div className="p-4 bg-red-950/60 border-2 border-red-500/60 rounded-xl space-y-3 animate-in zoom-in-95 duration-150">
               <div className="flex items-center gap-2 text-red-300 font-bold text-sm">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
-                Are you sure you want to delete the selected graphics?
+                Are you sure you want to approve permanent deletion?
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
                 This will delete <strong className="text-white">{request.graphicsCount} graphics</strong>{' '}
-                and free approximately <strong className="text-white">{request.formattedSize}</strong>{' '}
-                from storage. A quarantine backup will be kept. This operation is recorded in the Super Admin audit log.
+                and permanently release approximately <strong className="text-white">{request.formattedSize}</strong>{' '}
+                from disk storage. Database records and deliverables will be safely removed. This operation is recorded in the Super Admin audit log.
               </p>
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
@@ -313,7 +334,7 @@ export default function CleanupApprovalModal({
                     </>
                   ) : (
                     <>
-                      <Trash2 className="w-3.5 h-3.5" /> Confirm &amp; Execute Deletion
+                      <Trash2 className="w-3.5 h-3.5" /> Confirm Permanent Deletion
                     </>
                   )}
                 </button>
@@ -325,17 +346,17 @@ export default function CleanupApprovalModal({
             <div className="p-4 bg-slate-800/90 border border-slate-700 rounded-xl space-y-3 animate-in zoom-in-95 duration-150">
               <div className="flex items-center gap-2 text-slate-200 font-bold text-sm">
                 <XCircle className="w-5 h-5 text-amber-400" />
-                Reject Cleanup &amp; Preserve Graphics
+                Reject Deletion &amp; Preserve Graphics
               </div>
               <p className="text-xs text-slate-300">
-                Please provide the reason for rejection. This will be stored in governance records, and the next 15-day cycle will start automatically.
+                Provide an optional reason for rejecting the cleanup request. All graphics and files will remain intact.
               </p>
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Enter governance rejection reason (e.g. Graphics required for active quarter Q3 reporting / audit archive)..."
+                placeholder="Optional rejection reason (e.g., Graphics required for campaign retention or review)..."
                 rows={3}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-purple-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
               />
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button
@@ -371,7 +392,7 @@ export default function CleanupApprovalModal({
         {!isConfirmingApprove && !isRejecting && (
           <div className="p-4 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between gap-3">
             <div className="text-xs text-slate-400">
-              Decision will start the next 15-day cleanup cycle.
+              Graphics will only be permanently removed upon Super Admin approval.
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -392,7 +413,7 @@ export default function CleanupApprovalModal({
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-bold shadow-lg shadow-red-950/60 transition-all flex items-center gap-1.5"
               >
                 <Trash2 className="w-4 h-4" />
-                Approve &amp; Delete Graphics
+                Approve &amp; Permanently Delete
               </button>
             </div>
           </div>

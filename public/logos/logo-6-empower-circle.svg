@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
+  <defs>
+    <linearGradient id="empowerViolet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#6D28D9"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(12, 10)">
+    <polygon points="28,2 50,18 40,54 16,54 6,18" fill="url(#empowerViolet)" stroke="#F59E0B" stroke-width="2"/>
+    <circle cx="28" cy="24" r="5" fill="#FDE047"/>
+    <circle cx="18" cy="34" r="3.5" fill="#FFFFFF"/>
+    <circle cx="38" cy="34" r="3.5" fill="#FFFFFF"/>
+  </g>
+  <text x="82" y="36" font-family="Inter, -apple-system, sans-serif" font-weight="900" font-size="20" fill="#0F172A" letter-spacing="1.2">EMPOWER CIRCLE</text>
+  <text x="82" y="54" font-family="Inter, -apple-system, sans-serif" font-weight="700" font-size="9.5" fill="#7C3AED" letter-spacing="2.6">ENTERPRISE LEADERSHIP FORUM</text>
+</svg>

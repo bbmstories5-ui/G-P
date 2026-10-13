@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { createSession, signJwtToken } from '@/lib/auth';
+import { createSession, signJwtToken, requireAuth } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
+    // Enterprise RBAC: Only authenticated Super Admins can switch/impersonate accounts
+    const callerAdmin = await requireAuth(['ADMIN'], req);
+
     const { email, tabSessionId } = await req.json();
 
     if (!email) {
@@ -22,6 +25,17 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+
+    // Log the sensitive impersonation action
+    await prisma.activityLog.create({
+      data: {
+        userId: callerAdmin.id,
+        userName: callerAdmin.name,
+        userRole: callerAdmin.role,
+        action: 'ADMIN_ACCOUNT_SWITCH',
+        details: `Super Admin ${callerAdmin.name} switched session to ${user.email} (${user.role})`,
+      },
+    }).catch(() => {});
 
     // Create an independent database session for this client tab
     const userAgent = req.headers.get('user-agent') || 'Browser Client';
@@ -101,6 +115,12 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
+    if (error.message === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Unauthorized: Admin authentication required' }, { status: 401 });
+    }
+    if (error.message === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'Forbidden: Super Admin privileges required' }, { status: 403 });
+    }
     return NextResponse.json({ error: error.message || 'Error switching user' }, { status: 500 });
   }
 }

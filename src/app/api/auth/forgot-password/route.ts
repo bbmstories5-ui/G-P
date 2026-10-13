@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { signPasswordResetToken } from '@/lib/auth';
 import * as EmailModule from '@/lib/email';
 import nodemailer from 'nodemailer';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+
 
 async function dispatchResetEmailDirectly({
   toEmail,
@@ -24,8 +26,8 @@ async function dispatchResetEmailDirectly({
 
   // Self-contained Google Mail fallback (ensures 0 crash even if Turbopack HMR cache is stale)
   const gmailWebhookUrl = process.env.GMAIL_WEBHOOK_URL;
-  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
-  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
   const subject = 'Reset Your Creative Portal Password';
 
   const html = `
@@ -95,6 +97,20 @@ async function dispatchResetEmailDirectly({
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const rateLimit = checkRateLimit(ip, {
+      keyPrefix: 'forgot_pw',
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many password reset attempts. Please try again in 15 minutes.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const email = body?.email?.trim().toLowerCase();
 
@@ -109,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, name: true, role: true, status: true },
+      select: { id: true, email: true, name: true, role: true, status: true, password: true },
     });
 
     if (!user) {
@@ -127,8 +143,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate signed JWT reset token (valid for 1 hour)
-    const resetToken = signPasswordResetToken(user.id, user.email);
+    // Generate signed JWT reset token (valid for 1 hour, bound to user's current password hash)
+    const resetToken = signPasswordResetToken(user.id, user.email, user.password);
 
     // Formulate reset URL using current request host so it works anywhere (localhost or live)
     const hostHeader = request.headers.get('host');

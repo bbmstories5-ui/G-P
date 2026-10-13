@@ -35,6 +35,12 @@ model User {
   activityLogs     ActivityLog[]
   sessions         Session[]
   cleanupReviews   GraphicsCleanupRequest[] @relation("CleanupReviewedBy")
+  generatedCreatives GeneratedCreative[]
+  creativeRequests CreativeRequest[]
+  reportedIssues   SupportIssue[]           @relation("ReportedIssues")
+  assignedIssues   SupportIssue[]           @relation("AssignedIssues")
+  resolvedIssues   SupportIssue[]           @relation("ResolvedIssues")
+  issueActivities  IssueActivity[]
 }
 
 model Session {
@@ -63,9 +69,16 @@ model RequesterProfile {
   id          String   @id @default(uuid())
   userId      String   @unique
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memberCode  String   @unique // e.g., "Member 01", "Member 02", ...
-  department  String   @default("Marketing")
-  phone       String?
+  memberCode        String   @unique // e.g., "Member 01", "Member 02", ...
+  department        String   @default("Marketing")
+  phone             String?
+  company           String?
+  businessCategory  String?
+  website           String?
+  referralGroupName String?  @default("Apex Referral Chapter")
+  birthDay          String?
+  birthMonth        String?
+  specificAsk       String?
 }
 
 model DesignerProfile {
@@ -366,4 +379,243 @@ model DeletedGraphicLog {
   @@index([cleanupRequestId])
   @@index([status])
 }
+
+model CreativeCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique // MEETING_ANNOUNCEMENT | BUSINESS_PRESENTATION | KYM | BIRTHDAY
+  name        String   // Referral Meeting Announcement, Business Presentation, Know Your Member (KYM), Birthday Creatives
+  description String?
+  icon        String?  // lucide icon identifier
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  templates   CreativeTemplate[]
+  creatives   GeneratedCreative[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model CreativeTemplate {
+  id              String           @id @default(uuid())
+  categoryId      String
+  category        CreativeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String           // e.g., "Minimal Corporate", "Premium White & Gold", "Modern Blue", "Elegant Dark", "Colorful Celebration"
+  slug            String           @unique
+  description     String?
+  previewImageUrl String?
+  backgroundUrl   String?
+  baseDesignUrl   String?          // Custom uploaded base artwork URL
+  width           Int              @default(1080)
+  height          Int              @default(1080)
+  orientation     String           @default("SQUARE") // SQUARE | PORTRAIT | LANDSCAPE
+  themeStyle      String           @default("white-gold")
+  logoPosition    String           @default("top-left") // top-left | top-center | top-right | bottom-left | bottom-center | bottom-right
+  logoMaxWidth    Int              @default(200)
+  logoMaxHeight   Int              @default(70)
+  layoutVariant   String           @default("variant-1")
+  status          String           @default("PUBLISHED") // DRAFT | PUBLISHED | INACTIVE
+  approvalRequired Boolean         @default(false)
+  placeholders    String           @db.Text // JSON configuration of placeholders & mappings
+  stylingConfig   String?          @db.Text // JSON configuration of colors, typography, layout options
+  isActive        Boolean          @default(true)
+  isDefault       Boolean          @default(false)
+  sortOrder       Int              @default(0)
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  elements        TemplateElement[]
+  creatives       GeneratedCreative[]
+  creativeRequests CreativeRequest[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([isActive])
+}
+
+model BrandLogo {
+  id          String   @id @default(uuid())
+  name        String   // e.g. "Apex Referral Chapter", "Titans Executive Network", etc.
+  slug        String   @unique
+  logoUrl     String   // SVG or PNG url
+  darkLogoUrl String?  // Optional inverted or light logo for dark templates
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creatives   GeneratedCreative[]
+
+  @@index([isActive])
+}
+
+model GeneratedCreative {
+  id                String            @id @default(uuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId        String
+  category          CreativeCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  templateId        String?
+  template          CreativeTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  logoId            String?
+  logo              BrandLogo?        @relation(fields: [logoId], references: [id], onDelete: SetNull)
+  logoUrl           String?
+  title             String
+  referralGroupName String?
+  memberName        String?
+  formData          String            @db.Text // JSON: all inputs
+  fileUrl           String            // Downloadable file URL or data URI
+  previewUrl        String?           // Thumbnail or preview image URL
+  outputFormat      String            @default("PNG") // PNG | JPG | DOCX
+  fileSize          Int               @default(0)
+  dimensions        String?           // e.g. "1080x1080"
+  downloadCount     Int               @default(0)
+  lastDownloadedAt  DateTime?
+  creativeRequest   CreativeRequest?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([templateId])
+  @@index([logoId])
+  @@index([createdAt])
+}
+
+model TemplateElement {
+  id               String           @id @default(uuid())
+  templateId       String
+  template         CreativeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  elementType      String           // LOGO | FIXED_TEXT | DYNAMIC_FIELD | MEMBER_PHOTO | COMPANY_LOGO | IMAGE
+  fieldKey         String?          // e.g. memberName, companyName, mobileNumber, date, time, venue, specificAsk, dressCode, visitorFees, meetingStimulant
+  name             String           // Human-readable label
+  posX             Float            @default(0)
+  posY             Float            @default(0)
+  width            Float            @default(200)
+  height           Float            @default(50)
+  fontFamily       String           @default("Inter")
+  fontSize         Float            @default(24)
+  fontWeight       String           @default("normal")
+  textColor        String           @default("#000000")
+  textAlign        String           @default("left") // left | center | right
+  lineSpacing      Float            @default(1.2)
+  maxLines         Int              @default(1)
+  overflowBehavior String           @default("wrap") // wrap | truncate | shrink
+  zIndex           Int              @default(1)
+  isLocked         Boolean          @default(false)
+  isVisible        Boolean          @default(true)
+  isRequired       Boolean          @default(true)
+  defaultValue     String?
+  styleConfig      String?          @db.Text // JSON extra styles (e.g. borderRadius, padding, textShadow, background)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([templateId])
+  @@index([elementType])
+}
+
+model SharedFixedContent {
+  id        String   @id @default(uuid())
+  key       String   @unique // e.g. "global_footer", "global_sponsors", "global_leadership", "referral_group_name"
+  label     String
+  value     String   @db.Text // JSON or plain string
+  scope     String   @default("GLOBAL") // GLOBAL | TEMPLATE
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+model CreativeRequest {
+  id                  String             @id @default(uuid())
+  reqCode             String             @unique // e.g. CR-0001
+  memberId            String
+  member              User               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  templateId          String
+  template            CreativeTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  submittedData       String             @db.Text // JSON: all inputs from the form
+  photoUrl            String?
+  status              String             @default("PENDING_APPROVAL") // DRAFT | SUBMITTED | PENDING_APPROVAL | APPROVED | REJECTED | GENERATING | COMPLETED | FAILED
+  adminFeedback       String?
+  generatedCreativeId String?            @unique
+  generatedCreative   GeneratedCreative? @relation(fields: [generatedCreativeId], references: [id], onDelete: SetNull)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([memberId])
+  @@index([templateId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SupportIssue {
+  id                           String            @id @default(uuid())
+  issueCode                    String            @unique // e.g. ISS-0001
+  title                        String
+  description                  String            @db.Text
+  category                     String            @default("GENERAL") // CANVAS_STUDIO | TEMPLATE_EDITOR | DOWNLOAD_EXPORT | AUTH_LOGIN | UI_DISPLAY | GENERAL | OTHER
+  priority                     String            @default("MEDIUM")  // LOW | MEDIUM | HIGH | URGENT
+  status                       String            @default("OPEN")    // OPEN | IN_PROGRESS | RESOLVED | REOPENED | CLOSED
+  affectedPage                 String?           // e.g. /requester/creative-studio
+  reporterId                   String
+  reporter                     User              @relation("ReportedIssues", fields: [reporterId], references: [id], onDelete: Cascade)
+  assignedToId                 String?
+  assignedTo                   User?             @relation("AssignedIssues", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolvedById                 String?
+  resolvedBy                   User?             @relation("ResolvedIssues", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt                   DateTime?
+  resolutionSummary            String?           @db.Text
+  previousResolutions          String?           @db.Text // JSON history of resolutions if reopened
+  screenshotCleanupStatus      String            @default("NONE") // NONE | PENDING | COMPLETED | FAILED
+  screenshotCleanupCompletedAt DateTime?
+  screenshotCleanupError       String?           @db.Text
+  deletedScreenshotCount       Int               @default(0)
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+
+  attachments                  IssueAttachment[]
+  activities                   IssueActivity[]
+
+  @@index([status])
+  @@index([reporterId])
+  @@index([resolvedById])
+  @@index([createdAt])
+  @@index([priority])
+}
+
+model IssueAttachment {
+  id              String       @id @default(uuid())
+  issueId         String
+  issue           SupportIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileUrl         String
+  fileSize        Int          @default(0)
+  mimeType        String       @default("image/png")
+  isScreenshot    Boolean      @default(true)
+  storageProvider String       @default("LOCAL") // LOCAL | S3 | CLOUDINARY
+  uploadedAt      DateTime     @default(now())
+
+  @@index([issueId])
+  @@index([fileUrl])
+}
+
+model IssueActivity {
+  id        String       @id @default(uuid())
+  issueId   String
+  issue     SupportIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName  String
+  userRole  String
+  action    String       // CREATED | STATUS_CHANGE | RESOLVED | REOPENED | CLEANUP_COMPLETED | CLEANUP_FAILED | COMMENT
+  details   String?      @db.Text
+  timestamp DateTime     @default(now())
+
+  @@index([issueId])
+  @@index([timestamp])
+}
+
 

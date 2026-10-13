@@ -181,8 +181,8 @@ export default function Topbar({ user: initialUser, title = 'Portal' }: TopbarPr
                       const content = (
                         <div
                           className={`p-2.5 rounded-xl transition-all border ${!n.isRead
-                              ? 'bg-blue-50/70 border-blue-200/90 text-slate-900 shadow-2xs'
-                              : 'bg-slate-50/50 border-slate-100 text-slate-600 hover:bg-slate-100/80'
+                            ? 'bg-blue-50/70 border-blue-200/90 text-slate-900 shadow-2xs'
+                            : 'bg-slate-50/50 border-slate-100 text-slate-600 hover:bg-slate-100/80'
                             }`}
                         >
                           <div className="flex items-start justify-between gap-2">

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
+  <defs>
+    <linearGradient id="nexusCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#0369A1"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(12, 10)">
+    <circle cx="28" cy="28" r="24" fill="none" stroke="url(#nexusCyan)" stroke-width="3"/>
+    <ellipse cx="28" cy="28" rx="12" ry="24" fill="none" stroke="#38BDF8" stroke-width="2"/>
+    <line x1="4" y1="28" x2="52" y2="28" stroke="#0284C7" stroke-width="2"/>
+    <circle cx="28" cy="28" r="4" fill="#0369A1"/>
+  </g>
+  <text x="82" y="36" font-family="Inter, -apple-system, sans-serif" font-weight="900" font-size="20" fill="#0F172A" letter-spacing="1.2">NEXUS LEADERS</text>
+  <text x="82" y="54" font-family="Inter, -apple-system, sans-serif" font-weight="700" font-size="9.5" fill="#0284C7" letter-spacing="2.6">GLOBAL BUSINESS CHAPTER</text>
+</svg>

@@ -25,14 +25,7 @@ export async function POST(
     }
 
     const body = await req.json().catch(() => ({}));
-    const reason = (body.reason || '').trim();
-
-    if (!reason) {
-      return NextResponse.json(
-        { error: 'A rejection reason is required to document governance records.' },
-        { status: 400 }
-      );
-    }
+    const reason = (body.reason || '').trim() || 'Preserved by Super Admin decision';
 
     const result = await rejectCleanupRequest(id, user.id, reason);
 

@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { verifyPasswordResetToken } from '@/lib/auth';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const rateLimit = checkRateLimit(ip, {
+      keyPrefix: 'reset_pw',
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many password reset attempts. Please try again in 15 minutes.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { token, newPassword } = body;
 
@@ -15,9 +30,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 8) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters in length' },
+        { error: 'Password must be at least 8 characters in length for account security.' },
         { status: 400 }
       );
     }
@@ -34,11 +49,19 @@ export async function POST(request: NextRequest) {
     // Find target user
     const user = await prisma.user.findUnique({
       where: { id: tokenPayload.userId },
-      select: { id: true, email: true, name: true, role: true, status: true },
+      select: { id: true, email: true, name: true, role: true, status: true, password: true },
     });
 
     if (!user) {
       return NextResponse.json({ error: 'User account not found' }, { status: 404 });
+    }
+
+    // Anti-Replay check: If token was issued with a specific password hash, verify it matches
+    if (tokenPayload.pwh && user.password.slice(0, 16) !== tokenPayload.pwh) {
+      return NextResponse.json(
+        { error: 'This recovery link has already been used. Please request a new link if needed.' },
+        { status: 400 }
+      );
     }
 
     if (user.status === 'SUSPENDED') {

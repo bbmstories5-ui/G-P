@@ -3,10 +3,12 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { notifyDesignersOfNewRequirement } from '@/lib/notifications';
 import { logActivity } from '@/lib/audit';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -136,9 +138,23 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit(`${user.id}_${ip}`, {
+      keyPrefix: 'create_req',
+      limit: 30,
+      windowMs: 60 * 1000,
+    });
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many requests submitted. Please slow down.' },
+        { status: 429 }
+      );
     }
 
     if (user.role !== 'REQUESTER' && user.role !== 'ADMIN') {

@@ -17,18 +17,27 @@ export interface GraphicItemSnapshot {
   fileUrl: string;
   previewUrl?: string | null;
   fileSize: number;
+  formattedSize: string;
   mimeType?: string;
   requirementId: string;
   reqCode: string;
   requirementTitle: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerRole: string;
   createdAt: string;
+  expirationDate: string;
+  ageDays: number;
+  daysRemaining: number;
+  isExpired: boolean;
+  deletionStatus: 'ELIGIBLE_FOR_CLEANUP' | 'PENDING_APPROVAL' | 'PRESERVED' | 'ACTIVE';
 }
 
 /**
- * Format bytes into human-readable string (KB, MB, GB)
+ * Format bytes into human-readable string (KB, MB, GB, TB)
  */
 export function formatBytes(bytes: number, decimals: number = 2): string {
-  if (bytes === 0) return '0 Bytes';
+  if (!bytes || bytes <= 0) return '0 Bytes';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -37,49 +46,163 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
 }
 
 /**
+ * Checks whether a graphic's fileUrl or previewUrl is referenced anywhere else in the system.
+ * Prevents accidental deletion of shared assets.
+ */
+export async function isSharedGraphicFile(
+  fileUrl: string,
+  excludeVersionId: string
+): Promise<boolean> {
+  if (!fileUrl || fileUrl.startsWith('data:')) return false;
+
+  // 1. Check other graphic versions
+  const otherVersion = await prisma.graphicVersion.findFirst({
+    where: {
+      OR: [{ fileUrl }, { previewUrl: fileUrl }],
+      id: { not: excludeVersionId },
+    },
+    select: { id: true },
+  });
+  if (otherVersion) return true;
+
+  // 2. Check requirement reference files
+  const reqFile = await prisma.requirementFile.findFirst({
+    where: { fileUrl },
+    select: { id: true },
+  });
+  if (reqFile) return true;
+
+  // 3. Check generated creative output files
+  const genCreative = await prisma.generatedCreative.findFirst({
+    where: { OR: [{ fileUrl }, { previewUrl: fileUrl }] },
+    select: { id: true },
+  });
+  if (genCreative) return true;
+
+  // 4. Check user avatars
+  const avatar = await prisma.user.findFirst({
+    where: { avatar: fileUrl },
+    select: { id: true },
+  });
+  if (avatar) return true;
+
+  // 5. Check creative templates
+  const tmpl = await prisma.creativeTemplate.findFirst({
+    where: {
+      OR: [{ previewImageUrl: fileUrl }, { backgroundUrl: fileUrl }, { baseDesignUrl: fileUrl }],
+    },
+    select: { id: true },
+  });
+  if (tmpl) return true;
+
+  // 6. Check brand logos
+  const logo = await prisma.brandLogo.findFirst({
+    where: { OR: [{ logoUrl: fileUrl }, { darkLogoUrl: fileUrl }] },
+    select: { id: true },
+  });
+  if (logo) return true;
+
+  return false;
+}
+
+/**
  * Collect all active graphic files currently stored in database
+ * with reliable upload dates, calculated 15-day expiration dates, owners, and sizes.
  */
 export async function collectCurrentGraphicsData(): Promise<{
   totalCount: number;
   totalSizeBytes: number;
+  formattedStorageUsed: string;
+  expiredCount: number;
+  expiredSizeBytes: number;
+  formattedExpiredStorage: string;
+  estimatedReleasedSpace: string;
   items: GraphicItemSnapshot[];
+  expiredItems: GraphicItemSnapshot[];
 }> {
   const graphicVersions = await prisma.graphicVersion.findMany({
     include: {
       graphic: {
         include: {
-          requirement: true,
+          requirement: {
+            include: {
+              requester: { select: { id: true, name: true, email: true } },
+            },
+          },
+          designer: { select: { id: true, name: true, email: true } },
         },
       },
     },
     orderBy: { createdAt: 'desc' },
   });
 
+  const now = new Date();
   let totalSizeBytes = 0;
+  let expiredSizeBytes = 0;
   const items: GraphicItemSnapshot[] = [];
+  const expiredItems: GraphicItemSnapshot[] = [];
 
   for (const v of graphicVersions) {
     const size = v.fileSize || 0;
     totalSizeBytes += size;
-    items.push({
+
+    const createdTime = v.createdAt.getTime();
+    const expirationTime = createdTime + CLEANUP_INTERVAL_MS;
+    const expirationDate = new Date(expirationTime);
+    const ageDays = Math.max(0, Math.floor((now.getTime() - createdTime) / (1000 * 60 * 60 * 24)));
+    const isExpired = now.getTime() >= expirationTime;
+    const daysRemaining = Math.max(0, Math.ceil((expirationTime - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const ownerName =
+      v.graphic?.designer?.name ||
+      v.graphic?.requirement?.requester?.name ||
+      'Graphic Maker';
+    const ownerEmail =
+      v.graphic?.designer?.email ||
+      v.graphic?.requirement?.requester?.email ||
+      '';
+    const ownerRole = v.graphic?.designer ? 'DESIGNER' : 'REQUESTER';
+
+    const item: GraphicItemSnapshot = {
       graphicId: v.graphicId,
       versionId: v.id,
       fileName: v.fileName || 'graphic.png',
       fileUrl: v.fileUrl,
       previewUrl: v.previewUrl || v.fileUrl,
       fileSize: size,
+      formattedSize: formatBytes(size),
       mimeType: v.mimeType,
       requirementId: v.graphic.requirementId,
       reqCode: v.graphic.requirement?.reqCode || 'REQ-GENERAL',
       requirementTitle: v.graphic.requirement?.title || 'Graphic Deliverable',
+      ownerName,
+      ownerEmail,
+      ownerRole,
       createdAt: v.createdAt.toISOString(),
-    });
+      expirationDate: expirationDate.toISOString(),
+      ageDays,
+      daysRemaining,
+      isExpired,
+      deletionStatus: isExpired ? 'PENDING_APPROVAL' : 'ACTIVE',
+    };
+
+    items.push(item);
+    if (isExpired) {
+      expiredItems.push(item);
+      expiredSizeBytes += size;
+    }
   }
 
   return {
     totalCount: items.length,
     totalSizeBytes,
+    formattedStorageUsed: formatBytes(totalSizeBytes),
+    expiredCount: expiredItems.length,
+    expiredSizeBytes,
+    formattedExpiredStorage: formatBytes(expiredSizeBytes),
+    estimatedReleasedSpace: formatBytes(expiredSizeBytes),
     items,
+    expiredItems,
   };
 }
 
@@ -89,7 +212,6 @@ export async function collectCurrentGraphicsData(): Promise<{
  */
 export async function ensureActiveCleanupCycle() {
   try {
-    // 1. Get the most recent cycle
     let latestCycle = await prisma.graphicsCleanupRequest.findFirst({
       orderBy: { cycleNumber: 'desc' },
       include: {
@@ -103,7 +225,7 @@ export async function ensureActiveCleanupCycle() {
 
     // If no cycle exists, initialize Cycle #1
     if (!latestCycle) {
-      const { totalCount, totalSizeBytes, items } = await collectCurrentGraphicsData();
+      const currentData = await collectCurrentGraphicsData();
       const scheduledDate = new Date(now.getTime() + CLEANUP_INTERVAL_MS);
 
       latestCycle = await prisma.graphicsCleanupRequest.create({
@@ -111,10 +233,10 @@ export async function ensureActiveCleanupCycle() {
           cycleNumber: 1,
           startDate: now,
           scheduledDeletionDate: scheduledDate,
-          status: 'COUNTDOWN_ACTIVE',
-          graphicsCount: totalCount,
-          totalSizeBytes,
-          quarantineData: JSON.stringify(items),
+          status: currentData.expiredCount > 0 ? 'PENDING_APPROVAL' : 'COUNTDOWN_ACTIVE',
+          graphicsCount: currentData.expiredCount > 0 ? currentData.expiredCount : currentData.totalCount,
+          totalSizeBytes: currentData.expiredCount > 0 ? currentData.expiredSizeBytes : currentData.totalSizeBytes,
+          quarantineData: JSON.stringify(currentData.expiredCount > 0 ? currentData.expiredItems : currentData.items),
         },
         include: {
           reviewedBy: {
@@ -129,7 +251,7 @@ export async function ensureActiveCleanupCycle() {
     // If latest cycle is completed or rejected, start the next cycle automatically
     if (latestCycle.status === 'COMPLETED' || latestCycle.status === 'REJECTED') {
       const nextCycleNumber = latestCycle.cycleNumber + 1;
-      const { totalCount, totalSizeBytes, items } = await collectCurrentGraphicsData();
+      const currentData = await collectCurrentGraphicsData();
       const scheduledDate = new Date(now.getTime() + CLEANUP_INTERVAL_MS);
 
       latestCycle = await prisma.graphicsCleanupRequest.create({
@@ -137,10 +259,10 @@ export async function ensureActiveCleanupCycle() {
           cycleNumber: nextCycleNumber,
           startDate: now,
           scheduledDeletionDate: scheduledDate,
-          status: 'COUNTDOWN_ACTIVE',
-          graphicsCount: totalCount,
-          totalSizeBytes,
-          quarantineData: JSON.stringify(items),
+          status: currentData.expiredCount > 0 ? 'PENDING_APPROVAL' : 'COUNTDOWN_ACTIVE',
+          graphicsCount: currentData.expiredCount > 0 ? currentData.expiredCount : currentData.totalCount,
+          totalSizeBytes: currentData.expiredCount > 0 ? currentData.expiredSizeBytes : currentData.totalSizeBytes,
+          quarantineData: JSON.stringify(currentData.expiredCount > 0 ? currentData.expiredItems : currentData.items),
         },
         include: {
           reviewedBy: {
@@ -152,23 +274,21 @@ export async function ensureActiveCleanupCycle() {
       return latestCycle;
     }
 
-    // If currently COUNTDOWN_ACTIVE, check if 15 days have elapsed
+    // If currently COUNTDOWN_ACTIVE, check if 15 days elapsed OR if any graphics reached 15 days
     if (latestCycle.status === 'COUNTDOWN_ACTIVE') {
+      const currentData = await collectCurrentGraphicsData();
       const scheduledTime = new Date(latestCycle.scheduledDeletionDate).getTime();
-      const isPeriodCompleted = now.getTime() >= scheduledTime;
+      const isPeriodCompleted = now.getTime() >= scheduledTime || currentData.expiredCount > 0;
 
-      // Always update live statistics during the active countdown
-      const { totalCount, totalSizeBytes, items } = await collectCurrentGraphicsData();
-
-      if (isPeriodCompleted) {
+      if (isPeriodCompleted && currentData.expiredCount > 0) {
         // Transition to PENDING_APPROVAL - DO NOT delete graphics yet!
         latestCycle = await prisma.graphicsCleanupRequest.update({
           where: { id: latestCycle.id },
           data: {
             status: 'PENDING_APPROVAL',
-            graphicsCount: totalCount,
-            totalSizeBytes,
-            quarantineData: JSON.stringify(items),
+            graphicsCount: currentData.expiredCount,
+            totalSizeBytes: currentData.expiredSizeBytes,
+            quarantineData: JSON.stringify(currentData.expiredItems),
           },
           include: {
             reviewedBy: {
@@ -182,13 +302,13 @@ export async function ensureActiveCleanupCycle() {
           where: { role: 'ADMIN', status: 'ACTIVE' },
         });
 
-        const formattedSize = formatBytes(totalSizeBytes);
+        const formattedSize = formatBytes(currentData.expiredSizeBytes);
 
         for (const admin of admins) {
           await sendNotification({
             userId: admin.id,
             title: `⚠️ 15-Day Graphics Cleanup Approval Required (Cycle #${latestCycle.cycleNumber})`,
-            message: `The 15-day countdown has completed. ${totalCount} graphics (${formattedSize}) are scheduled for deletion. Please review and approve or reject.`,
+            message: `${currentData.expiredCount} graphic(s) have reached 15 days (${formattedSize}). Super Admin approval is required to permanently delete files and free storage.`,
             type: 'SYSTEM',
             priority: 'URGENT',
             actionUrl: '/admin/cleanup',
@@ -197,13 +317,12 @@ export async function ensureActiveCleanupCycle() {
             entityId: latestCycle.id,
           });
 
-          // Send Email to Super Admin
           try {
             await sendSystemNotificationEmail({
               to: admin.email,
               recipientName: admin.name,
               title: `15-Day Graphics Cleanup Approval Required`,
-              message: `The 15-day graphics database cleanup cycle #${latestCycle.cycleNumber} has completed its countdown.\n\nSummary:\n- Total Graphics: ${totalCount}\n- Storage Size: ${formattedSize}\n- Scheduled Deletion Date: ${latestCycle.scheduledDeletionDate.toLocaleString()}\n\nAction Required: Super Admin approval is needed before any graphics can be deleted. No graphics have been deleted.`,
+              message: `The 15-day graphics database cleanup cycle #${latestCycle.cycleNumber} requires your review.\n\nSummary:\n- Expired Graphics: ${currentData.expiredCount}\n- Estimated Storage to Free: ${formattedSize}\n\nNote: Graphics are NOT deleted automatically. Super Admin explicit approval is required.`,
               actionUrl: `/admin/cleanup`,
               actionLabel: 'Review Request in Portal',
             });
@@ -212,14 +331,14 @@ export async function ensureActiveCleanupCycle() {
           }
         }
       } else {
-        // Update stats if changed
-        if (latestCycle.graphicsCount !== totalCount || latestCycle.totalSizeBytes !== totalSizeBytes) {
+        // Update live metrics during countdown
+        if (latestCycle.graphicsCount !== currentData.totalCount || latestCycle.totalSizeBytes !== currentData.totalSizeBytes) {
           latestCycle = await prisma.graphicsCleanupRequest.update({
             where: { id: latestCycle.id },
             data: {
-              graphicsCount: totalCount,
-              totalSizeBytes,
-              quarantineData: JSON.stringify(items),
+              graphicsCount: currentData.totalCount,
+              totalSizeBytes: currentData.totalSizeBytes,
+              quarantineData: JSON.stringify(currentData.items),
             },
             include: {
               reviewedBy: {
@@ -236,6 +355,158 @@ export async function ensureActiveCleanupCycle() {
     console.error('Error in ensureActiveCleanupCycle:', err);
     throw err;
   }
+}
+
+/**
+ * Delete a single graphic version permanently after Super Admin approval.
+ * Safe: Checks shared references, unlinks storage, deletes DB records, updates logs.
+ */
+export async function deleteSingleGraphicVersion(
+  versionId: string,
+  adminUserId: string,
+  options?: { reason?: string }
+): Promise<{
+  success: boolean;
+  message: string;
+  deletedFile: boolean;
+  skippedShared: boolean;
+  freedBytes: number;
+}> {
+  const version = await prisma.graphicVersion.findUnique({
+    where: { id: versionId },
+    include: {
+      graphic: {
+        include: {
+          requirement: true,
+        },
+      },
+    },
+  });
+
+  if (!version) {
+    throw new Error(`Graphic version not found: ${versionId}`);
+  }
+
+  const adminUser = await prisma.user.findUnique({ where: { id: adminUserId } });
+  if (!adminUser || adminUser.role !== 'ADMIN') {
+    throw new Error('Forbidden: Only authorized Super Admins can execute permanent graphic deletion.');
+  }
+
+  const fileSize = version.fileSize || 0;
+  const fileName = version.fileName || 'graphic.png';
+  const fileUrl = version.fileUrl;
+  const previewUrl = version.previewUrl;
+  let deletedFile = false;
+  let skippedShared = false;
+
+  // 1. Storage file deletion (verify not shared elsewhere first)
+  if (fileUrl && fileUrl.startsWith('/uploads/')) {
+    const isShared = await isSharedGraphicFile(fileUrl, versionId);
+    if (isShared) {
+      skippedShared = true;
+    } else {
+      const relativePath = fileUrl.replace(/^\//, '').split('?')[0];
+      const absolutePath = path.join(process.cwd(), 'public', relativePath);
+      try {
+        await fs.access(absolutePath);
+        await fs.unlink(absolutePath);
+        deletedFile = true;
+      } catch (e: any) {
+        if (e.code === 'ENOENT') {
+          deletedFile = true; // Already gone
+        } else {
+          console.warn(`Could not unlink graphic file ${relativePath}:`, e.message);
+        }
+      }
+    }
+  }
+
+  // Delete preview file if exists and not shared
+  if (previewUrl && previewUrl.startsWith('/uploads/') && previewUrl !== fileUrl) {
+    const isSharedPreview = await isSharedGraphicFile(previewUrl, versionId);
+    if (!isSharedPreview) {
+      const relPreview = previewUrl.replace(/^\//, '').split('?')[0];
+      const absPreview = path.join(process.cwd(), 'public', relPreview);
+      try {
+        await fs.unlink(absPreview);
+      } catch {}
+    }
+  }
+
+  // 2. Database Record Deletion in safe transaction
+  await prisma.$transaction(async (tx: any) => {
+    // Disconnect requirement finalGraphicId
+    await tx.requirement.updateMany({
+      where: { finalGraphicId: version.graphicId },
+      data: { finalGraphicId: null },
+    });
+
+    // Delete approvals & revisions
+    await tx.approval.deleteMany({
+      where: { graphicVersionId: version.id },
+    });
+    await tx.revision.deleteMany({
+      where: { graphicVersionId: version.id },
+    });
+
+    // Delete graphic version
+    await tx.graphicVersion.delete({
+      where: { id: version.id },
+    });
+
+    // If no versions left, delete parent graphic
+    const remainingCount = await tx.graphicVersion.count({
+      where: { graphicId: version.graphicId },
+    });
+    if (remainingCount === 0) {
+      await tx.graphic.delete({
+        where: { id: version.graphicId },
+      });
+    }
+  });
+
+  // 3. Log Audit Records
+  await logActivity({
+    userId: adminUserId,
+    userName: adminUser.name,
+    userRole: 'ADMIN',
+    action: 'GRAPHIC_MANUALLY_DELETED',
+    details: `Permanently deleted graphic "${fileName}" (${formatBytes(fileSize)}). File unlinked: ${deletedFile}, Shared preserved: ${skippedShared}.`,
+  });
+
+  // Also record in active cycle if exists
+  const activeCycle = await prisma.graphicsCleanupRequest.findFirst({
+    orderBy: { cycleNumber: 'desc' },
+  });
+  if (activeCycle) {
+    await prisma.deletedGraphicLog.create({
+      data: {
+        cleanupRequestId: activeCycle.id,
+        graphicId: version.graphicId,
+        graphicVersionId: version.id,
+        requirementCode: version.graphic?.requirement?.reqCode || 'REQ-GENERAL',
+        fileName,
+        fileUrl,
+        fileSize,
+        status: 'SUCCESS',
+      },
+    });
+
+    await prisma.graphicsCleanupRequest.update({
+      where: { id: activeCycle.id },
+      data: {
+        deletedCount: { increment: 1 },
+      },
+    });
+  }
+
+  return {
+    success: true,
+    message: `Graphic "${fileName}" successfully and permanently deleted. ${formatBytes(fileSize)} released.`,
+    deletedFile,
+    skippedShared,
+    freedBytes: fileSize,
+  };
 }
 
 /**
@@ -271,56 +542,55 @@ export async function executeApprovedCleanup(requestId: string, adminUserId: str
     items = [];
   }
 
-  // If quarantineData is empty, re-collect current data
+  // Merge currently expired items so all eligible assets are cleaned up
+  const fresh = await collectCurrentGraphicsData();
+  const itemVersionIds = new Set(items.map((i) => i.versionId));
+  for (const exp of fresh.expiredItems) {
+    if (!itemVersionIds.has(exp.versionId)) {
+      items.push(exp);
+      itemVersionIds.add(exp.versionId);
+    }
+  }
+
   if (items.length === 0) {
-    const fresh = await collectCurrentGraphicsData();
     items = fresh.items;
   }
 
   let deletedCount = 0;
   let failedCount = 0;
+  let totalFreedBytes = 0;
   const executionLogs: string[] = [];
-
-  // Setup quarantine backup directory before permanent deletion
-  const quarantineDir = path.join(process.cwd(), 'public', 'uploads', 'quarantine', requestId);
-  try {
-    await fs.mkdir(quarantineDir, { recursive: true });
-  } catch {}
 
   for (const item of items) {
     try {
-      // 1. Storage file deletion / quarantine
+      // 1. Storage file deletion (with shared asset check)
       if (item.fileUrl && item.fileUrl.startsWith('/uploads/')) {
-        const relativePath = item.fileUrl.replace(/^\//, '').split('?')[0];
-        const absolutePath = path.join(process.cwd(), 'public', relativePath);
+        const isShared = await isSharedGraphicFile(item.fileUrl, item.versionId);
+        if (isShared) {
+          executionLogs.push(`Preserved shared asset file on disk: ${item.fileUrl}`);
+        } else {
+          const relativePath = item.fileUrl.replace(/^\//, '').split('?')[0];
+          const absolutePath = path.join(process.cwd(), 'public', relativePath);
 
-        try {
-          // Check if file exists on disk
-          await fs.access(absolutePath);
-
-          // Backup into quarantine folder first
-          const backupPath = path.join(quarantineDir, path.basename(absolutePath));
           try {
-            await fs.copyFile(absolutePath, backupPath);
-          } catch {}
-
-          // Remove original file
-          await fs.unlink(absolutePath);
-          executionLogs.push(`Deleted physical file: ${relativePath}`);
-        } catch (fsErr: any) {
-          executionLogs.push(`Physical file not found or already removed: ${relativePath} (${fsErr.message})`);
+            await fs.access(absolutePath);
+            await fs.unlink(absolutePath);
+            executionLogs.push(`Permanently deleted physical file: ${relativePath}`);
+          } catch (fsErr: any) {
+            if (fsErr.code !== 'ENOENT') {
+              throw fsErr;
+            }
+          }
         }
       }
 
       // 2. Database Record Deletion in safe transaction
-      await prisma.$transaction(async (tx) => {
-        // Disconnect finalGraphicId from Requirement if it points to this graphic
+      await prisma.$transaction(async (tx: any) => {
         await tx.requirement.updateMany({
           where: { finalGraphicId: item.graphicId },
           data: { finalGraphicId: null },
         });
 
-        // Delete approvals and revisions tied to this graphic version
         await tx.approval.deleteMany({
           where: { graphicVersionId: item.versionId },
         });
@@ -328,12 +598,10 @@ export async function executeApprovedCleanup(requestId: string, adminUserId: str
           where: { graphicVersionId: item.versionId },
         });
 
-        // Delete graphic version
         await tx.graphicVersion.deleteMany({
           where: { id: item.versionId },
         });
 
-        // If no versions left for parent graphic, delete graphic parent
         const remainingVersions = await tx.graphicVersion.count({
           where: { graphicId: item.graphicId },
         });
@@ -344,7 +612,7 @@ export async function executeApprovedCleanup(requestId: string, adminUserId: str
         }
       });
 
-      // Record success in DeletedGraphicLog
+      // Record in DeletedGraphicLog
       await prisma.deletedGraphicLog.create({
         data: {
           cleanupRequestId: requestId,
@@ -359,11 +627,11 @@ export async function executeApprovedCleanup(requestId: string, adminUserId: str
       });
 
       deletedCount++;
+      totalFreedBytes += item.fileSize || 0;
     } catch (itemErr: any) {
       failedCount++;
       executionLogs.push(`Failed to delete item ${item.versionId} (${item.fileName}): ${itemErr.message}`);
 
-      // Record failure in DeletedGraphicLog
       await prisma.deletedGraphicLog.create({
         data: {
           cleanupRequestId: requestId,
@@ -400,10 +668,10 @@ export async function executeApprovedCleanup(requestId: string, adminUserId: str
     userName: adminUser?.name || 'Super Admin',
     userRole: 'ADMIN',
     action: 'GRAPHICS_AUTO_CLEANUP_EXECUTED',
-    details: `Executed Cycle #${request.cycleNumber}: ${deletedCount} graphics deleted, ${failedCount} failed.`,
+    details: `Executed Cycle #${request.cycleNumber}: ${deletedCount} graphics deleted (${formatBytes(totalFreedBytes)} freed), ${failedCount} failed.`,
   });
 
-  // Automatically start the next 15-day cycle!
+  // Automatically start the next 15-day cycle
   await ensureActiveCleanupCycle();
 
   return updatedRequest;
@@ -445,10 +713,105 @@ export async function rejectCleanupRequest(requestId: string, adminUserId: strin
     details: `Rejected Cycle #${request.cycleNumber}. Reason: ${reason}. Graphics preserved safely.`,
   });
 
-  // Automatically start the next 15-day cycle!
+  // Automatically start the next 15-day cycle
   await ensureActiveCleanupCycle();
 
   return updatedRequest;
+}
+
+/**
+ * Daily Server-Side Scheduler Function:
+ * Inspects all graphics daily. If graphics >= 15 days old exist,
+ * automatically generates or updates a Super Admin approval request.
+ * NEVER deletes graphics without Super Admin explicit approval.
+ */
+export async function runDaily15DayExpirationScheduler() {
+  const now = new Date();
+  const currentData = await collectCurrentGraphicsData();
+
+  // Check if a pending approval request already exists
+  const existingPending = await prisma.graphicsCleanupRequest.findFirst({
+    where: { status: 'PENDING_APPROVAL' },
+  });
+
+  if (currentData.expiredCount > 0) {
+    if (!existingPending) {
+      // Create new pending approval request
+      const latestCycle = await prisma.graphicsCleanupRequest.findFirst({
+        orderBy: { cycleNumber: 'desc' },
+      });
+      const nextCycleNumber = (latestCycle?.cycleNumber || 0) + 1;
+
+      const newRequest = await prisma.graphicsCleanupRequest.create({
+        data: {
+          cycleNumber: nextCycleNumber,
+          startDate: now,
+          scheduledDeletionDate: now,
+          status: 'PENDING_APPROVAL',
+          graphicsCount: currentData.expiredCount,
+          totalSizeBytes: currentData.expiredSizeBytes,
+          quarantineData: JSON.stringify(currentData.expiredItems),
+        },
+      });
+
+      // Notify Super Admins
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN', status: 'ACTIVE' },
+      });
+
+      const formattedSize = formatBytes(currentData.expiredSizeBytes);
+      for (const admin of admins) {
+        await sendNotification({
+          userId: admin.id,
+          title: `⚠️ 15-Day Graphics Cleanup Approval Required`,
+          message: `${currentData.expiredCount} graphic(s) have reached 15 days (${formattedSize}). Please review and approve deletion to free storage.`,
+          type: 'SYSTEM',
+          priority: 'URGENT',
+          actionUrl: '/admin/cleanup',
+          actionLabel: 'Review Request →',
+        });
+      }
+
+      return {
+        success: true,
+        timestamp: now.toISOString(),
+        action: 'PENDING_REQUEST_CREATED',
+        expiredCount: currentData.expiredCount,
+        expiredSizeBytes: currentData.expiredSizeBytes,
+        formattedExpiredSize: formattedSize,
+        requestId: newRequest.id,
+      };
+    } else {
+      // Update existing pending request with latest expired items queue
+      const updatedRequest = await prisma.graphicsCleanupRequest.update({
+        where: { id: existingPending.id },
+        data: {
+          graphicsCount: currentData.expiredCount,
+          totalSizeBytes: currentData.expiredSizeBytes,
+          quarantineData: JSON.stringify(currentData.expiredItems),
+        },
+      });
+
+      return {
+        success: true,
+        timestamp: now.toISOString(),
+        action: 'EXISTING_PENDING_REQUEST_UPDATED',
+        expiredCount: currentData.expiredCount,
+        expiredSizeBytes: currentData.expiredSizeBytes,
+        formattedExpiredSize: formatBytes(currentData.expiredSizeBytes),
+        requestId: updatedRequest.id,
+      };
+    }
+  }
+
+  return {
+    success: true,
+    timestamp: now.toISOString(),
+    action: existingPending ? 'EXISTING_PENDING_REQUEST_ACTIVE' : 'NO_NEW_EXPIRED_GRAPHICS',
+    expiredCount: currentData.expiredCount,
+    totalCount: currentData.totalCount,
+    storageUsed: currentData.formattedStorageUsed,
+  };
 }
 
 /**
@@ -466,7 +829,7 @@ export async function getCleanupSystemStats() {
   const minutesRemaining = Math.floor((msRemaining % (60 * 60 * 1000)) / (60 * 1000));
   const secondsRemaining = Math.floor((msRemaining % (60 * 1000)) / 1000);
 
-  // Overall database graphics totals
+  // Overall database graphics totals with expiration analysis
   const currentData = await collectCurrentGraphicsData();
 
   // Historical requests summary
@@ -478,7 +841,7 @@ export async function getCleanupSystemStats() {
       },
       deletedLogs: {
         orderBy: { deletedAt: 'desc' },
-        take: 20,
+        take: 30,
       },
     },
   });
@@ -516,13 +879,16 @@ export async function getCleanupSystemStats() {
       hours: hoursRemaining,
       minutes: minutesRemaining,
       seconds: secondsRemaining,
-      isExpired: msRemaining === 0,
+      isExpired: msRemaining === 0 || currentData.expiredCount > 0,
       percentageElapsed: Math.min(100, Math.max(0, Math.round(((CLEANUP_INTERVAL_MS - msRemaining) / CLEANUP_INTERVAL_MS) * 100))),
     },
     metrics: {
       totalGraphicsStored: currentData.totalCount,
       totalStorageBytes: currentData.totalSizeBytes,
-      formattedStorageUsed: formatBytes(currentData.totalSizeBytes),
+      formattedStorageUsed: currentData.formattedStorageUsed,
+      totalExpiredGraphics: currentData.expiredCount,
+      storageOccupiedByExpired: currentData.formattedExpiredStorage,
+      estimatedReleasedSpace: currentData.estimatedReleasedSpace,
       pendingRequestsCount,
       approvedRequestsCount,
       rejectedRequestsCount,
@@ -553,6 +919,7 @@ export async function getCleanupSystemStats() {
       failedCount: r.failedCount,
       createdAt: r.createdAt,
     })),
-    recentGraphics: currentData.items.slice(0, 15),
+    recentGraphics: currentData.items,
+    expiredGraphics: currentData.expiredItems,
   };
 }

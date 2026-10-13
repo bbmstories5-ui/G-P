@@ -94,6 +94,13 @@ export default function ProfileSettingsView({
   const [specialty, setSpecialty] = useState('');
   const [title, setTitle] = useState('');
   const [bio, setBio] = useState('');
+  const [company, setCompany] = useState('');
+  const [businessCategory, setBusinessCategory] = useState('');
+  const [website, setWebsite] = useState('');
+  const [referralGroupName, setReferralGroupName] = useState('');
+  const [birthDay, setBirthDay] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [specificAsk, setSpecificAsk] = useState('');
 
   // Password Form Fields
   const [currentPassword, setCurrentPassword] = useState('');
@@ -174,6 +181,13 @@ export default function ProfileSettingsView({
         if (data.user.requesterProfile) {
           setDepartment(data.user.requesterProfile.department || '');
           setPhone(data.user.requesterProfile.phone || '');
+          setCompany(data.user.requesterProfile.company || '');
+          setBusinessCategory(data.user.requesterProfile.businessCategory || '');
+          setWebsite(data.user.requesterProfile.website || '');
+          setReferralGroupName(data.user.requesterProfile.referralGroupName || 'Apex Chapter');
+          setBirthDay(data.user.requesterProfile.birthDay || '');
+          setBirthMonth(data.user.requesterProfile.birthMonth || '');
+          setSpecificAsk(data.user.requesterProfile.specificAsk || '');
         }
         if (data.user.designerProfile) {
           setSpecialty(data.user.designerProfile.specialty || '');
@@ -279,6 +293,13 @@ export default function ProfileSettingsView({
         department,
         specialty,
         title,
+        company,
+        businessCategory,
+        website,
+        referralGroupName,
+        birthDay,
+        birthMonth,
+        specificAsk,
       };
 
       const res = await tabFetch('/api/auth/profile', {
@@ -714,13 +735,37 @@ export default function ProfileSettingsView({
                       <>
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
-                            Department / Business Unit
+                            Referral Group / Chapter Name
                           </label>
                           <input
                             type="text"
-                            value={department}
-                            onChange={(e) => setDepartment(e.target.value)}
-                            placeholder="e.g. Marketing Operations"
+                            value={referralGroupName}
+                            onChange={(e) => setReferralGroupName(e.target.value)}
+                            placeholder="e.g. Apex Chapter"
+                            className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                            Company Name
+                          </label>
+                          <input
+                            type="text"
+                            value={company}
+                            onChange={(e) => setCompany(e.target.value)}
+                            placeholder="e.g. Apex Architectural Solutions"
+                            className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                            Business Category
+                          </label>
+                          <input
+                            type="text"
+                            value={businessCategory}
+                            onChange={(e) => setBusinessCategory(e.target.value)}
+                            placeholder="e.g. Commercial Architecture"
                             className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
                           />
                         </div>
@@ -732,8 +777,58 @@ export default function ProfileSettingsView({
                             type="text"
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
-                            placeholder="+1 (555) 000-0000"
+                            placeholder="+91 98250 11223"
                             className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                            Website
+                          </label>
+                          <input
+                            type="text"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder="https://company.example"
+                            className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                              Birth Day
+                            </label>
+                            <input
+                              type="text"
+                              value={birthDay}
+                              onChange={(e) => setBirthDay(e.target.value)}
+                              placeholder="e.g. 15th"
+                              className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                              Birth Month
+                            </label>
+                            <input
+                              type="text"
+                              value={birthMonth}
+                              onChange={(e) => setBirthMonth(e.target.value)}
+                              placeholder="e.g. October"
+                              className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition"
+                            />
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 uppercase tracking-wider mb-2">
+                            Specific Ask / Ideal Referral
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={specificAsk}
+                            onChange={(e) => setSpecificAsk(e.target.value)}
+                            placeholder="e.g. Warm introductions to commercial real estate developers in BKC"
+                            className="w-full px-4 py-2.5 text-sm bg-slate-50 dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition resize-none"
                           />
                         </div>
                       </>

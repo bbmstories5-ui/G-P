@@ -5,23 +5,26 @@ import bcrypt from 'bcryptjs';
 
 export async function GET(req: NextRequest) {
   try {
-    console.log('[SETUP] Running database migration and seeding...');
+    const setupSecret = process.env.SETUP_SECRET;
+    const providedSecret = req.headers.get('x-setup-secret') || req.nextUrl.searchParams.get('secret');
 
-    // 1. Run schema push
-    try {
-      execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
-    } catch (e: any) {
-      console.warn('[SETUP] db push warning:', e.message);
+    // In production or when SETUP_SECRET is configured, require secret verification
+    if (process.env.NODE_ENV === 'production' || setupSecret) {
+      if (!setupSecret || providedSecret !== setupSecret) {
+        return NextResponse.json(
+          { error: 'Forbidden: Database initialization endpoint is protected.' },
+          { status: 403 }
+        );
+      }
     }
 
-    // 2. Check if users already exist
+    // 1. Check if users already exist
     const userCount = await prisma.user.count().catch(() => 0);
     if (userCount > 0) {
       return NextResponse.json({
         success: true,
-        message: `Database already initialized with ${userCount} users!`,
+        message: `Database already initialized with ${userCount} users.`,
         usersCount: userCount,
-        superAdmin: 'dhruviktra.rajput.1379@gmail.com',
       });
     }
 
@@ -136,9 +139,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'All PostgreSQL tables created and 18 accounts initialized successfully!',
-      superAdmin: 'dhruviktra.rajput.1379@gmail.com',
-      password: 'Set to 12345678',
+      message: 'Database initialized successfully with default system accounts.',
     });
   } catch (error: any) {
     console.error('[SETUP ERROR]', error);

@@ -173,9 +173,8 @@ export async function POST(req: NextRequest) {
       message: `User ${name} invited successfully!`,
       user: newUser,
       emailDispatched: emailResult?.success ?? false,
-      credentials: {
+      inviteDetails: {
         email: cleanEmail,
-        password,
         role,
         identifier: calculatedCode || role,
         loginUrl,

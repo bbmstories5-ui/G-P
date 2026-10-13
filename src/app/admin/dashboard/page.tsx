@@ -21,6 +21,7 @@ import {
   Eye,
   CheckSquare,
   TrendingUp,
+  HardDrive,
 } from 'lucide-react';
 import AnalyticsCard from '@/components/analytics/AnalyticsCard';
 import StatusDonutChart from '@/components/analytics/StatusDonutChart';
@@ -143,55 +144,153 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* 15-Day Graphics Cleanup Notification Banner */}
+      {/* 15-Day Graphics Cleanup Governance Banner */}
       {cleanupData && (
-        <div className={`rounded-2xl p-4.5 border transition-all ${cleanupData.pendingRequest
-            ? 'bg-gradient-to-r from-red-950/60 via-amber-950/40 to-slate-900 border-amber-500/60 shadow-lg shadow-amber-950/20'
-            : 'bg-slate-900 border-purple-900/40'
-          } flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-white`}>
-          <div className="flex items-start gap-3.5">
-            <div className={`p-2.5 rounded-xl shrink-0 ${cleanupData.pendingRequest
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-              }`}>
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${cleanupData.pendingRequest
-                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
-                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                  }`}>
-                  Cycle #{cleanupData.activeCycle?.cycleNumber || 1} • {cleanupData.pendingRequest ? 'Approval Required' : 'Countdown Active'}
-                </span>
-                <span className="text-xs text-slate-400">
-                  {cleanupData.metrics?.totalGraphicsStored || 0} graphics ({cleanupData.metrics?.formattedStorageUsed || '0 Bytes'}) stored
-                </span>
+        <div
+          className={`relative overflow-hidden rounded-2xl border transition-all duration-300 shadow-md ${
+            cleanupData.pendingRequest
+              ? 'bg-gradient-to-r from-red-950/70 via-amber-950/40 to-slate-900 border-amber-500/50 shadow-amber-950/20'
+              : 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/40 border-slate-800/90 hover:border-purple-500/30 shadow-slate-950/30'
+          }`}
+        >
+          {/* Ambient background glow accent */}
+          <div
+            className={`absolute -right-12 -top-12 w-48 h-48 rounded-full blur-3xl pointer-events-none ${
+              cleanupData.pendingRequest ? 'bg-amber-500/10' : 'bg-purple-500/10'
+            }`}
+          />
+
+          <div className="relative z-10 p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Left: Icon, Cycle Badge, and Policy Title */}
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div
+                className={`w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border shadow-xs transition-transform duration-200 ${
+                  cleanupData.pendingRequest
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    : 'bg-purple-500/15 text-purple-400 border-purple-500/25'
+                }`}
+              >
+                {cleanupData.pendingRequest ? (
+                  <AlertCircle className="w-5 h-5 animate-pulse" />
+                ) : (
+                  <Shield className="w-5 h-5" />
+                )}
               </div>
-              <p className="text-sm font-bold text-white mt-0.5">
-                {cleanupData.pendingRequest
-                  ? `⚠️ 15-Day Period Ended: ${cleanupData.pendingRequest.graphicsCount} graphics queued for deletion. Approval pending.`
-                  : `Next Auto-Cleanup Review: ${cleanupData.countdown?.days || 0}d ${cleanupData.countdown?.hours || 0}h remaining`}
-              </p>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                      cleanupData.pendingRequest
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        cleanupData.pendingRequest
+                          ? 'bg-amber-400 animate-ping'
+                          : 'bg-emerald-400 animate-pulse'
+                      }`}
+                    />
+                    Cycle #{cleanupData.activeCycle?.cycleNumber || 1} •{' '}
+                    {cleanupData.pendingRequest ? 'Approval Required' : 'Countdown Active'}
+                  </span>
+
+                  <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+                    15-Day Storage Retention Policy
+                  </span>
+                </div>
+
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+                  {cleanupData.pendingRequest
+                    ? `⚠️ 15-Day Cycle Complete: ${cleanupData.pendingRequest.graphicsCount} assets queued for deletion`
+                    : 'Automated Graphic Storage Governance'}
+                </h3>
+              </div>
+            </div>
+
+            {/* Center: Live Status Metric Chips */}
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 py-0.5">
+              {/* Countdown / Review chip */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs shadow-xs">
+                <Clock className="w-4 h-4 text-purple-400 shrink-0" />
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                    Next Auto-Review
+                  </div>
+                  <div className="font-bold text-white text-xs sm:text-sm tracking-tight">
+                    {cleanupData.pendingRequest ? (
+                      <span className="text-amber-400">Review Pending Now</span>
+                    ) : (
+                      <span>
+                        <span className="text-purple-300 font-extrabold">
+                          {cleanupData.countdown?.days || 0}d {cleanupData.countdown?.hours || 0}h
+                        </span>{' '}
+                        <span className="text-slate-400 text-[11px] font-normal">remaining</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Storage Footprint chip */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs shadow-xs">
+                <HardDrive className="w-4 h-4 text-indigo-400 shrink-0" />
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                    Active Storage
+                  </div>
+                  <div className="font-bold text-white text-xs sm:text-sm tracking-tight">
+                    <span className="text-slate-100 font-extrabold">
+                      {cleanupData.metrics?.totalGraphicsStored || 0}
+                    </span>{' '}
+                    <span className="text-slate-400 text-[11px] font-normal">files</span>{' '}
+                    <span className="text-slate-500 font-medium">•</span>{' '}
+                    <span className="text-indigo-300 font-extrabold">
+                      {cleanupData.metrics?.formattedStorageUsed || '0 Bytes'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Action Buttons */}
+            <div className="flex items-center gap-2.5 shrink-0 self-end lg:self-center">
+              {cleanupData.pendingRequest && (
+                <button
+                  onClick={() => setShowCleanupModal(true)}
+                  className="px-4 py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-extrabold text-xs rounded-xl shadow-md shadow-red-950/40 transition-all flex items-center gap-2 animate-pulse"
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Review &amp; Approve
+                </button>
+              )}
+              <Link
+                href="/admin/cleanup"
+                className="group px-4 py-2.5 bg-slate-800/90 hover:bg-purple-600 text-slate-200 hover:text-white border border-slate-700/80 hover:border-purple-500 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 shadow-xs"
+              >
+                <span>Cleanup Center</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-            {cleanupData.pendingRequest && (
-              <button
-                onClick={() => setShowCleanupModal(true)}
-                className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-              >
-                Review &amp; Approve
-              </button>
-            )}
-            <Link
-              href="/admin/cleanup"
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
-            >
-              Cleanup Center <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+          {/* Slim progress bar indicating elapsed cycle */}
+          {!cleanupData.pendingRequest && (
+            <div className="w-full bg-slate-800/40 h-1 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full transition-all duration-500 rounded-r-full"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.max(4, cleanupData.countdown?.percentageElapsed || 0)
+                  )}%`,
+                }}
+                title={`${cleanupData.countdown?.percentageElapsed || 0}% of 15-day cycle elapsed`}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -7,7 +7,7 @@ export function middleware(request: NextRequest) {
 
   // Extract ?u= query parameter (e.g. member01, member02, designer01, approver, admin)
   const u = request.nextUrl.searchParams.get('u')?.toLowerCase().trim();
-  if (u) {
+  if (u && /^[a-z0-9_-]{1,50}$/.test(u)) {
     requestHeaders.set('x-user-key', u);
     // If the browser has a dedicated cookie for this account, attach it to downstream request
     const userCookie = request.cookies.get(`token_${u}`)?.value;

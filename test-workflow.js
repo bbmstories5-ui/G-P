@@ -57,12 +57,32 @@ async function runTests() {
     headers: { Cookie: cookieMember04 },
   });
   console.log('   Requirements found for Member 04:', reqs04.body.requirements?.length);
-  const diwaliReq = reqs04.body.requirements.find((r) => r.reqCode === 'REQ-0001');
-  console.log('   REQ-0001 Status:', diwaliReq?.status, '| Title:', diwaliReq?.title);
-  console.log('   Final Approved Graphic Attached:', Boolean(diwaliReq?.finalGraphicId));
+  let targetReq = reqs04.body.requirements?.[0];
+  if (!targetReq) {
+    const createReq = await request(
+      {
+        hostname: 'localhost',
+        port: 3000,
+        path: '/api/requirements',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookieMember04 },
+      },
+      {
+        title: 'Brand Diwali Campaign Graphic',
+        description: 'Diwali promotional asset for member04',
+        category: 'Social Media',
+        platform: 'Instagram',
+        dimensions: '1080 x 1080',
+        priority: 'MEDIUM',
+        deadline: '2026-10-31',
+      }
+    );
+    targetReq = createReq.body.requirement;
+  }
+  console.log('   Target Req Status:', targetReq?.status, '| Title:', targetReq?.title);
 
-  // 3. Strict Isolation Test: Login as Member 01 and try to access REQ-0001
-  console.log('\n3️⃣ Strict Isolation Test: Member 01 attempting to fetch Member 04\'s REQ-0001...');
+  // 3. Strict Isolation Test: Login as Member 01 and try to access Member 04's requirement
+  console.log('\n3️⃣ Strict Isolation Test: Member 01 attempting to fetch Member 04\'s requirement...');
   const loginMember01 = await request(
     {
       hostname: 'localhost',
@@ -78,7 +98,7 @@ async function runTests() {
   const unauthorizedAccess = await request({
     hostname: 'localhost',
     port: 3000,
-    path: `/api/requirements/${diwaliReq.id}`,
+    path: `/api/requirements/${targetReq.id}`,
     method: 'GET',
     headers: { Cookie: cookieMember01 },
   });

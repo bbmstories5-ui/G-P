@@ -3,7 +3,14 @@ import { cookies, headers } from 'next/headers';
 import crypto from 'crypto';
 import prisma from './prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'creative-portal-super-secure-jwt-secret-key-2026';
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  (process.env.NODE_ENV === 'production'
+    ? (() => {
+        throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production!');
+      })()
+    : 'creative-portal-dev-only-secret-do-not-use-in-production-2026');
+
 
 export interface AuthPayload {
   userId: string;
@@ -241,30 +248,7 @@ export async function getCurrentUser(req?: Request, preferredRole?: 'REQUESTER' 
     }
   }
 
-  // If URL explicitly requested a known account (e.g. ?u=member01, ?u=member02, ?u=approver), resolve account directly
-  if (targetUserKey) {
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: `${targetUserKey}@company.com` },
-          { email: targetUserKey },
-        ],
-        status: 'ACTIVE',
-      },
-      include: {
-        requesterProfile: true,
-        designerProfile: true,
-        approverProfile: true,
-      },
-    });
-
-    if (user) {
-      if (!preferredRole || user.role === preferredRole || user.role === 'ADMIN') {
-        return user;
-      }
-    }
-  }
-
+  // End of token checks. If no valid cryptographic token & DB session was found, access is strictly denied.
   return null;
 }
 
@@ -324,8 +308,8 @@ export async function revokeAllUserSessions(userId: string) {
   });
 }
 
-export async function requireAuth(allowedRoles?: Array<'REQUESTER' | 'DESIGNER' | 'APPROVER' | 'ADMIN'>) {
-  const user = await getCurrentUser();
+export async function requireAuth(allowedRoles?: Array<'REQUESTER' | 'DESIGNER' | 'APPROVER' | 'ADMIN'>, req?: Request) {
+  const user = await getCurrentUser(req);
   if (!user) {
     throw new Error('UNAUTHORIZED');
   }
@@ -398,11 +382,17 @@ export async function assertRequirementAccess(requirementId: string, user: any) 
 }
 
 /**
- * Signs a secure, time-limited JWT for password reset (valid for 1 hour)
+ * Signs a secure, time-limited JWT for password reset (valid for 1 hour).
+ * Binds password hash prefix to ensure tokens cannot be replayed after password update.
  */
-export function signPasswordResetToken(userId: string, email: string): string {
+export function signPasswordResetToken(userId: string, email: string, passwordHash?: string): string {
   return jwt.sign(
-    { userId, email: email.toLowerCase().trim(), type: 'PASSWORD_RESET' },
+    {
+      userId,
+      email: email.toLowerCase().trim(),
+      type: 'PASSWORD_RESET',
+      pwh: passwordHash ? passwordHash.slice(0, 16) : undefined,
+    },
     JWT_SECRET,
     { expiresIn: '1h' }
   );
@@ -411,11 +401,11 @@ export function signPasswordResetToken(userId: string, email: string): string {
 /**
  * Verifies a password reset JWT token and returns user credentials if valid
  */
-export function verifyPasswordResetToken(token: string): { userId: string; email: string } | null {
+export function verifyPasswordResetToken(token: string): { userId: string; email: string; pwh?: string } | null {
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     if (decoded && decoded.type === 'PASSWORD_RESET' && decoded.userId && decoded.email) {
-      return { userId: decoded.userId, email: decoded.email };
+      return { userId: decoded.userId, email: decoded.email, pwh: decoded.pwh };
     }
     return null;
   } catch {

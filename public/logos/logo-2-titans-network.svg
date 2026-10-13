@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
+  <defs>
+    <linearGradient id="titanBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#1E3A8A"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(12, 10)">
+    <path d="M30,2 L56,12 L56,36 C56,52 30,62 30,62 C30,62 4,52 4,36 L4,12 Z" fill="url(#titanBlue)" stroke="#F59E0B" stroke-width="2.5"/>
+    <text x="30" y="42" font-family="Georgia, serif" font-weight="900" font-size="30" fill="#FFFFFF" text-anchor="middle">T</text>
+  </g>
+  <text x="82" y="36" font-family="Inter, -apple-system, sans-serif" font-weight="900" font-size="20" fill="#0F172A" letter-spacing="1.2">TITANS NETWORK</text>
+  <text x="82" y="54" font-family="Inter, -apple-system, sans-serif" font-weight="700" font-size="9.5" fill="#2563EB" letter-spacing="2.6">BUSINESS POWER EXCHANGE</text>
+</svg>

@@ -282,8 +282,8 @@ export async function sendInvitationEmail({
   }
 
   const gmailWebhookUrl = process.env.GMAIL_WEBHOOK_URL;
-  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
-  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
   const loginUrl = resolveLiveLoginUrl(rawLoginUrl);
   const subject = `Welcome to Creative Portal - Account Invitation`;
 
@@ -563,8 +563,8 @@ export async function sendPasswordResetEmail({
   }
 
   const gmailWebhookUrl = process.env.GMAIL_WEBHOOK_URL;
-  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
-  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
   const resetUrl = resolveLiveLoginUrl(rawResetUrl);
   const subject = `Reset Your Creative Portal Password`;
 
@@ -665,8 +665,8 @@ export async function sendSystemNotificationEmail({
     return { success: false, error: `Invalid recipient email format: ${cleanEmail}` };
   }
 
-  const smtpUser = process.env.SMTP_USER || 'bbmstories5@gmail.com';
-  const smtpPass = process.env.SMTP_PASS || 'hggdkekltkehelmo';
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
   const liveActionUrl = actionUrl ? resolveLiveLoginUrl(actionUrl) : '';
   const subject = `[SYSTEM ALERT] ${title}`;
 

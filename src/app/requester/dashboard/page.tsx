@@ -141,6 +141,14 @@ export default function RequesterDashboard() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <Link
+            href="/requester/creative-studio"
+            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-all shrink-0"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Member Creative Studio</span>
+          </Link>
+
           <button
             onClick={() => fetchAnalytics(false)}
             disabled={isRefreshing}
@@ -158,6 +166,34 @@ export default function RequesterDashboard() {
             <span>New Request</span>
           </Link>
         </div>
+      </div>
+
+      {/* Referral Group Creative Generator Spotlight Banner */}
+      <div className="bg-gradient-to-r from-blue-50/80 via-white to-amber-50/60 border border-blue-100 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-start gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              Referral Group Creative Generator Studio
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                New Feature
+              </span>
+            </h2>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Generate ready-made Announcement, Business Presentation, KYM, and Month-wise Birthday graphics + Word rosters in seconds with minimum effort.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/requester/creative-studio"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
+        >
+          <span>Open Creative Studio</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Top Analytics KPI Cards (7 Cards as per specification) */}

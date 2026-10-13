@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { createSession, signJwtToken } from '@/lib/auth';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit(ip, {
+      keyPrefix: 'login',
+      limit: 10,
+      windowMs: 60 * 1000, // 10 attempts per minute
+    });
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many login attempts. Please wait 1 minute before trying again.' },
+        { status: 429 }
+      );
+    }
+
     const { email, password, expectedRole, tabSessionId } = await req.json();
 
     if (!email || !password) {
@@ -21,7 +36,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'Invalid email or credentials' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
     if (user.status !== 'ACTIVE') {
