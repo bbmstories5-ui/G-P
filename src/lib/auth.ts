@@ -3,13 +3,20 @@ import { cookies, headers } from 'next/headers';
 import crypto from 'crypto';
 import prisma from './prisma';
 
-const JWT_SECRET =
-  process.env.JWT_SECRET ||
-  (process.env.NODE_ENV === 'production'
-    ? (() => {
-        throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production!');
-      })()
-    : 'creative-portal-dev-only-secret-do-not-use-in-production-2026');
+export function getJwtSecret(): string {
+  if (process.env.JWT_SECRET) {
+    return process.env.JWT_SECRET;
+  }
+  // During Next.js build phase or development mode, allow fallback secret
+  if (
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.npm_lifecycle_event === 'build' ||
+    process.env.NODE_ENV !== 'production'
+  ) {
+    return 'creative-portal-dev-only-secret-do-not-use-in-production-2026';
+  }
+  throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is missing in production!');
+}
 
 
 export interface AuthPayload {
@@ -62,12 +69,12 @@ export async function createSession(
 }
 
 export function signJwtToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '30d' });
 }
 
 export function verifyJwtToken(token: string): AuthPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AuthPayload;
+    return jwt.verify(token, getJwtSecret()) as AuthPayload;
   } catch (err) {
     return null;
   }
@@ -393,7 +400,7 @@ export function signPasswordResetToken(userId: string, email: string, passwordHa
       type: 'PASSWORD_RESET',
       pwh: passwordHash ? passwordHash.slice(0, 16) : undefined,
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: '1h' }
   );
 }
@@ -403,7 +410,7 @@ export function signPasswordResetToken(userId: string, email: string, passwordHa
  */
 export function verifyPasswordResetToken(token: string): { userId: string; email: string; pwh?: string } | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
     if (decoded && decoded.type === 'PASSWORD_RESET' && decoded.userId && decoded.email) {
       return { userId: decoded.userId, email: decoded.email, pwh: decoded.pwh };
     }
