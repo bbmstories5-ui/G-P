@@ -18,13 +18,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Always ensure creative categories exist
+    const categoryCount = await prisma.creativeCategory.count().catch(() => 0);
+    if (categoryCount === 0) {
+      const defaultCategories = [
+        { code: 'MEETING_ANNOUNCEMENT', name: 'Referral Meeting Announcement', icon: 'Calendar', sortOrder: 1 },
+        { code: 'BUSINESS_PRESENTATION', name: 'Business Presentation', icon: 'Presentation', sortOrder: 2 },
+        { code: 'KYM', name: 'Know Your Member (KYM)', icon: 'UserCheck', sortOrder: 3 },
+        { code: 'BIRTHDAY', name: 'Monthly Birthday Creatives', icon: 'Cake', sortOrder: 4 },
+      ];
+      for (const cat of defaultCategories) {
+        await prisma.creativeCategory.upsert({
+          where: { code: cat.code },
+          update: { name: cat.name, icon: cat.icon, sortOrder: cat.sortOrder, isActive: true },
+          create: { code: cat.code, name: cat.name, icon: cat.icon, sortOrder: cat.sortOrder, isActive: true },
+        });
+      }
+    }
+
     // 1. Check if users already exist
     const userCount = await prisma.user.count().catch(() => 0);
     if (userCount > 0) {
       return NextResponse.json({
         success: true,
-        message: `Database already initialized with ${userCount} users.`,
+        message: `Database already initialized with ${userCount} users and categories verified.`,
         usersCount: userCount,
+        categoriesCount: await prisma.creativeCategory.count().catch(() => 0),
       });
     }
 

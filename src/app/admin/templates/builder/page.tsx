@@ -87,6 +87,11 @@ export default function SuperAdminTemplateBuilderPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [logoLibrary, setLogoLibrary] = useState<any[]>([]);
   const [sharedFooterConfig, setSharedFooterConfig] = useState<any>(null);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isSeedingCategories, setIsSeedingCategories] = useState(false);
 
   // Template State
   const [templateId, setTemplateId] = useState<string | null>(templateIdParam);
@@ -228,6 +233,71 @@ export default function SuperAdminTemplateBuilderPage() {
     }
   };
 
+  // Quick Category Creator
+  const handleCreateCategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCategoryName.trim()) {
+      alert('Please enter a category name');
+      return;
+    }
+    setIsCreatingCategory(true);
+    try {
+      const res = await tabFetch('/api/creatives/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCategoryName.trim(),
+          description: newCategoryDescription.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.category) {
+        setCategories((prev) => {
+          const exists = prev.some((c) => c.id === data.category.id);
+          return exists ? prev : [...prev, data.category];
+        });
+        setCategoryId(data.category.id);
+        setShowAddCategoryModal(false);
+        setNewCategoryName('');
+        setNewCategoryDescription('');
+      } else {
+        alert(data.error || 'Failed to create category');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error creating category');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  // Restore Default Categories
+  const handleSeedDefaultCategories = async () => {
+    setIsSeedingCategories(true);
+    try {
+      const res = await tabFetch('/api/creatives/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'seed_defaults' }),
+      });
+      const data = await res.json();
+      if (data.categories && data.categories.length > 0) {
+        setCategories(data.categories);
+        setCategoryId((prev) => prev || data.categories[0].id);
+      } else {
+        const refetch = await tabFetch('/api/creatives/categories?all=true');
+        const refetchData = await refetch.json();
+        if (refetchData.categories && refetchData.categories.length > 0) {
+          setCategories(refetchData.categories);
+          setCategoryId((prev) => prev || refetchData.categories[0].id);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error seeding categories:', err);
+    } finally {
+      setIsSeedingCategories(false);
+    }
+  };
+
   // Load initial data
   useEffect(() => {
     async function loadData() {
@@ -242,10 +312,24 @@ export default function SuperAdminTemplateBuilderPage() {
         const logosJson = await logosRes.json();
         const sharedJson = await sharedRes.json();
 
-        if (catsJson.categories) {
+        if (catsJson.categories && Array.isArray(catsJson.categories) && catsJson.categories.length > 0) {
           setCategories(catsJson.categories);
-          if (!categoryId && catsJson.categories.length > 0) {
-            setCategoryId(catsJson.categories[0].id);
+          setCategoryId((prev) => prev || catsJson.categories[0].id);
+        } else {
+          // If empty array returned (e.g. fresh database), trigger self-healing defaults seed
+          try {
+            const seedRes = await tabFetch('/api/creatives/categories', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'seed_defaults' }),
+            });
+            const seedJson = await seedRes.json();
+            if (seedJson.categories && seedJson.categories.length > 0) {
+              setCategories(seedJson.categories);
+              setCategoryId((prev) => prev || seedJson.categories[0].id);
+            }
+          } catch (seedErr) {
+            console.error('Auto-seed attempt failed:', seedErr);
           }
         }
         if (logosJson.logos) setLogoLibrary(logosJson.logos);
@@ -1659,18 +1743,61 @@ export default function SuperAdminTemplateBuilderPage() {
             {currentStep === 1 && (
               <div className="p-4 space-y-4 text-xs">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Creative Category *</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-slate-700 block">Creative Category *</label>
+                    <div className="flex items-center gap-2">
+                      {categories.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleSeedDefaultCategories}
+                          disabled={isSeedingCategories}
+                          className="text-[11px] text-amber-600 hover:text-amber-700 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          {isSeedingCategories ? 'Restoring...' : 'Restore Defaults'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCategoryModal(true)}
+                        className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        + New Category
+                      </button>
+                    </div>
+                  </div>
                   <select
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    {categories.length === 0 ? (
+                      <option value="">No categories found — Click 'Restore Defaults' above</option>
+                    ) : (
+                      <>
+                        <option value="">-- Select Creative Category --</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
+                  {categories.length === 0 && (
+                    <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] flex items-center justify-between">
+                      <span>No categories loaded in database.</span>
+                      <button
+                        type="button"
+                        onClick={handleSeedDefaultCategories}
+                        disabled={isSeedingCategories}
+                        className="px-2 py-1 bg-amber-600 text-white font-bold rounded hover:bg-amber-700 transition cursor-pointer"
+                      >
+                        {isSeedingCategories ? 'Restoring...' : 'Restore Defaults Now'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2795,6 +2922,81 @@ export default function SuperAdminTemplateBuilderPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          ADD NEW CATEGORY MODAL IN BUILDER
+          ===================================================================== */}
+      {showAddCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                  <FolderPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-800">Add Creative Category</h3>
+                  <p className="text-[11px] text-slate-500">Create a new category for templates and designs</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Category Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Festival Greetings, Achievement Awards, Product Launch"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Description <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  placeholder="Brief description of templates filed under this category..."
+                  value={newCategoryDescription}
+                  onChange={(e) => setNewCategoryDescription(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none font-medium"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategoryModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingCategory || !newCategoryName.trim()}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {isCreatingCategory ? 'Creating...' : 'Create & Select Category'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

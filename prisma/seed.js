@@ -4,6 +4,68 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
+  // Always ensure default creative categories exist
+  try {
+    const existingCats = await prisma.creativeCategory.count().catch(() => 0);
+    if (existingCats === 0) {
+      console.log('--- SEEDING DEFAULT CREATIVE CATEGORIES ---');
+      const defaultCategories = [
+        {
+          code: 'MEETING_ANNOUNCEMENT',
+          name: 'Referral Meeting Announcement',
+          description: 'Announce chapter meetings with date, time, venue, stimulants, dress code, and visitor fees.',
+          icon: 'Calendar',
+          sortOrder: 1,
+        },
+        {
+          code: 'BUSINESS_PRESENTATION',
+          name: 'Business Presentation',
+          description: 'Highlight 8-min or 10-min member feature presentation, credentials, and specific asks.',
+          icon: 'Presentation',
+          sortOrder: 2,
+        },
+        {
+          code: 'KYM',
+          name: 'Know Your Member (KYM)',
+          description: 'Official member profile showcase with clear portrait, company, business category, and contact details.',
+          icon: 'UserCheck',
+          sortOrder: 3,
+        },
+        {
+          code: 'BIRTHDAY',
+          name: 'Monthly Birthday Creatives',
+          description: 'Celebrate member birthdays month-wise with personalized graphics and exportable Word (.docx) member rosters.',
+          icon: 'Cake',
+          sortOrder: 4,
+        },
+      ];
+
+      for (const cat of defaultCategories) {
+        await prisma.creativeCategory.upsert({
+          where: { code: cat.code },
+          update: {
+            name: cat.name,
+            description: cat.description,
+            icon: cat.icon,
+            sortOrder: cat.sortOrder,
+            isActive: true,
+          },
+          create: {
+            code: cat.code,
+            name: cat.name,
+            description: cat.description,
+            icon: cat.icon,
+            sortOrder: cat.sortOrder,
+            isActive: true,
+          },
+        });
+      }
+      console.log('--- DEFAULT CREATIVE CATEGORIES SEEDED ---');
+    }
+  } catch (err) {
+    console.error('Error ensuring creative categories:', err);
+  }
+
   const existingUsers = await prisma.user.count().catch(() => 0);
   if (existingUsers > 0) {
     console.log(`--- DATABASE ALREADY SEEDED (${existingUsers} users found). READY ---`);
